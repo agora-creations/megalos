@@ -1,0 +1,13 @@
+# Editor and OS
+.DS_Store
+*.swp
+*~
+.vscode/
+.idea/
+
+# Test artifacts
+tests/tmp/
+tests/*.out
+
+# Local notes
+SCRATCH.md
