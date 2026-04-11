@@ -5,6 +5,11 @@
 
 set -e
 
+if [ "$#" -lt 2 ]; then
+  echo "validate_markdown: usage: $0 <file> <required-header> [<required-header>...]" >&2
+  exit 1
+fi
+
 FILE="$1"
 shift
 
