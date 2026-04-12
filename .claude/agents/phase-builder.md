@@ -1,7 +1,7 @@
 ---
 name: phase-builder
 description: Executes one mikrós task in an isolated git worktree with pre-loaded context. Invoked only by the /execute-task command. Never invoked directly by the user.
-tools: ["Read", "Write", "Edit", "Bash(docmancer:*)", "Bash(git:*)", "Bash(ruff:*)", "Bash(mypy:*)", "Bash(pytest:*)", "Bash(python:*)", "Bash(python3:*)", "Bash(pip:*)", "Bash(uv:*)", "Bash(poetry:*)", "Bash(black:*)", "Bash(npm:*)", "Bash(node:*)", "Bash(npx:*)", "Bash(yarn:*)", "Bash(pnpm:*)", "Bash(tsc:*)", "Bash(bun:*)", "Bash(deno:*)", "Bash(eslint:*)", "Bash(prettier:*)", "Bash(vitest:*)", "Bash(jest:*)", "Bash(cargo:*)", "Bash(rustc:*)", "Bash(rustfmt:*)", "Bash(clippy:*)", "Bash(go:*)", "Bash(gofmt:*)", "Bash(golangci-lint:*)", "Bash(ruby:*)", "Bash(bundle:*)", "Bash(gem:*)", "Bash(rake:*)", "Bash(rspec:*)", "Bash(rubocop:*)", "Bash(java:*)", "Bash(javac:*)", "Bash(mvn:*)", "Bash(gradle:*)", "Bash(kotlinc:*)", "Bash(ktlint:*)", "Bash(dotnet:*)", "Bash(swift:*)", "Bash(swiftc:*)", "Bash(swiftlint:*)", "Bash(gcc:*)", "Bash(g++:*)", "Bash(clang:*)", "Bash(clang++:*)", "Bash(make:*)", "Bash(cmake:*)", "Bash(ninja:*)", "Bash(elixir:*)", "Bash(mix:*)", "Bash(ghc:*)", "Bash(cabal:*)", "Bash(stack:*)", "Bash(php:*)", "Bash(composer:*)", "Bash(phpunit:*)", "Bash(bash:*)", "Bash(sh:*)", "Bash(shellcheck:*)"]
+tools: ["Read", "Write", "Edit", "Bash(git:*)", "Bash(ruff:*)", "Bash(mypy:*)", "Bash(pytest:*)", "Bash(python:*)", "Bash(python3:*)", "Bash(pip:*)", "Bash(uv:*)", "Bash(poetry:*)", "Bash(black:*)", "Bash(npm:*)", "Bash(node:*)", "Bash(npx:*)", "Bash(yarn:*)", "Bash(pnpm:*)", "Bash(tsc:*)", "Bash(bun:*)", "Bash(deno:*)", "Bash(eslint:*)", "Bash(prettier:*)", "Bash(vitest:*)", "Bash(jest:*)", "Bash(cargo:*)", "Bash(rustc:*)", "Bash(rustfmt:*)", "Bash(clippy:*)", "Bash(go:*)", "Bash(gofmt:*)", "Bash(golangci-lint:*)", "Bash(ruby:*)", "Bash(bundle:*)", "Bash(gem:*)", "Bash(rake:*)", "Bash(rspec:*)", "Bash(rubocop:*)", "Bash(java:*)", "Bash(javac:*)", "Bash(mvn:*)", "Bash(gradle:*)", "Bash(kotlinc:*)", "Bash(ktlint:*)", "Bash(dotnet:*)", "Bash(swift:*)", "Bash(swiftc:*)", "Bash(swiftlint:*)", "Bash(gcc:*)", "Bash(g++:*)", "Bash(clang:*)", "Bash(clang++:*)", "Bash(make:*)", "Bash(cmake:*)", "Bash(ninja:*)", "Bash(elixir:*)", "Bash(mix:*)", "Bash(ghc:*)", "Bash(cabal:*)", "Bash(stack:*)", "Bash(php:*)", "Bash(composer:*)", "Bash(phpunit:*)", "Bash(bash:*)", "Bash(sh:*)", "Bash(shellcheck:*)"]
 model: inherit
 isolation: worktree
 maxTurns: 30
@@ -31,9 +31,9 @@ Your dispatch prompt contains **everything you need**: the task plan, prior task
 
 If you realize the task does not fit in one context window, stop immediately. Do not compress your reasoning to force-fit. Return an error asking `/plan-slice` to split the task.
 
-## Grounding discipline — always query docmancer
+## Grounding discipline — query docmancer when available (recommended)
 
-Before writing code that touches **any external library, CLI, framework, or protocol**, run `docmancer query "<topic>"` and read the returned chunks. This is not "when uncertain" — it is every time. Your training cutoff makes you a silent hallucination factory for API signatures, CLI flags, and config keys. Docmancer grounds you in the user's locally indexed, version-specific docs.
+When `docmancer` is on PATH, query it before writing code that touches **any external library, CLI, framework, or protocol**. Your training cutoff makes you a silent hallucination factory for API signatures, CLI flags, and config keys. Docmancer grounds you in the user's locally indexed, version-specific docs.
 
 **Operational rules:**
 
@@ -43,8 +43,6 @@ Before writing code that touches **any external library, CLI, framework, or prot
 - **Tag or scope when helpful.** If the user set up tagged vaults, `docmancer query --tag <tag>` or `--cross-vault` narrows the search. Default to untagged if you don't know.
 - **Cite in Decisions.** When a docmancer chunk drives a non-trivial design choice, record it in the `### Decisions` section of your summary with the query and the key quote.
 - **Graceful fallback.** If `docmancer` is not on PATH, or the query returns zero chunks, note the gap explicitly in `### Decisions` ("docmancer index had no coverage for <topic>; proceeded with minimal surface area and flagged for later ingest") and proceed with the smallest safe subset of the API you're confident about. Do not invent.
-
-This rule is not negotiable. The `simplicity-guard` skill's `anti-patterns.md` is the authoritative statement of the rule — re-read it at the start of every task.
 
 ## Caveman mode
 

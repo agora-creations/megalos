@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 TESTS=(
   tests/test_anti_patterns.sh
   tests/test_simplicity_guard_skill.sh
+  tests/test_simplicity_guard_standalone.sh
   tests/test_loc_budget.sh
   tests/test_phase_builder_agent.sh
   tests/test_session_start.sh
@@ -17,6 +18,9 @@ TESTS=(
   tests/test_claude_md.sh
   tests/test_settings.sh
   tests/test_install.sh
+  tests/test_mikros.sh
+  tests/test_gemini_extension.sh
+  tests/test_integration.sh
 )
 
 FAILED=0

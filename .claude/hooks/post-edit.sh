@@ -6,11 +6,13 @@
 # the model as immediate feedback.
 #
 # PostToolUse hooks receive input via stdin as JSON:
-#   { "tool_name": "Write", "tool_input": { "file_path": "...", ... }, ... }
+#   Claude Code: { "tool_name": "Write", "tool_input": { "file_path": "..." }, ... }
+#   Gemini CLI:  { "tool_name": "Write", "tool_args":  { "file_path": "..." }, ... }
 
 set -e
 
-EDITED=$(jq -r '.tool_input.file_path // empty' 2>/dev/null || true)
+# Accept both tool_input (Claude Code) and tool_args (Gemini CLI).
+EDITED=$(jq -r '(.tool_input.file_path // .tool_args.file_path) // empty' 2>/dev/null || true)
 
 # No path reported → nothing to check (some tool calls don't carry a file path)
 if [ -z "$EDITED" ]; then

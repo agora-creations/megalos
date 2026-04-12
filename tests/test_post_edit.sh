@@ -69,4 +69,14 @@ echo '{"tool_name":"Write","tool_input":{"file_path":"foo.md"}}' \
   | ( cd "$WORK" && PATH="$WORK/bin:$PATH" bash "$OLDPWD/$HOOK" )
 assert_exit_code 0 $? "markdown file → skip lint, exit 0"
 
+# --- Test 5 (Gemini CLI): tool_args.file_path → exit 0
+echo '{"tool_name":"Write","tool_args":{"file_path":"foo.py"}}' \
+  | ( cd "$WORK" && PATH="$WORK/bin:$PATH" bash "$OLDPWD/$HOOK" )
+assert_exit_code 0 $? "Gemini CLI tool_args.file_path → exit 0"
+
+# --- Test 6 (Gemini CLI): tool_args with no file_path → exit 0
+echo '{"tool_name":"Write","tool_args":{}}' \
+  | ( cd "$WORK" && PATH="$WORK/bin:$PATH" bash "$OLDPWD/$HOOK" )
+assert_exit_code 0 $? "Gemini CLI tool_args no file_path → exit 0"
+
 test_summary

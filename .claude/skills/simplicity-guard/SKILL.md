@@ -4,9 +4,11 @@ description: Enforces mikrós anti-bloat rules. PROACTIVELY invoke this skill wh
 allowed-tools: Read, Bash(git:*), Bash(ruff:*), Bash(mypy:*)
 ---
 
-# simplicity-guard
+# simplicity-guard (mikrós wrapper)
 
-You are guarding against AI over-engineering. Before you write any code, read both of the following files:
+This is the mikrós-integrated wrapper. The standalone skill lives in `simplicity-guard/` at project root. This wrapper adds mikrós-specific context.
+
+Before you write any code, read both of the following files:
 
 1. `references/anti-patterns.md` — the rule list. These override your defaults.
 2. `references/gotchas.md` — known failure modes from prior mikrós sessions.

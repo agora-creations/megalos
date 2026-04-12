@@ -14,13 +14,13 @@
 
 **Heavy orchestration layers.** Don't duplicate what the agent infrastructure already provides. Build on top of it, don't wrap it.
 
-## mikrós additions
+## Additional rules
 
 **No interface with a single implementation.** If there is one impl, inline it. Interfaces earn their place when there are at least two consumers and a real reason to swap.
 
 **No dataclass for internal data.** Use dicts or tuples unless validation is required. A 17-field dataclass for a result object is a code smell, not a solution.
 
-**No nested config > 1 level deep.** Flat structures win. `config.database.pool.max_size` → `config.db_pool_max_size`.
+**No nested config > 1 level deep.** Flat structures win. `config.database.pool.max_size` -> `config.db_pool_max_size`.
 
 **No directory depth > 2 in small projects.** `src/` plus one level. Anything deeper has to earn its place.
 
@@ -30,10 +30,10 @@
 
 **Boring is a feature.** Clever code loses to boring code that the next reader (human or AI) can understand in ten seconds.
 
-**Don't fabricate API signatures — always query docmancer.** Before writing code that touches any external library, CLI, or framework API, run `docmancer query "<topic>"` and read the returned chunks. This is not "when uncertain" — it is every time. Training-data cutoffs are silent hallucination factories for APIs. If `docmancer` is not on PATH, or its local index has no chunks for the topic, note that explicitly in the task's `### Decisions` section and proceed with the smallest safe surface area.
+**Don't fabricate API signatures.** Before writing code that touches any external library, CLI, or framework API, consult the documentation. Training-data cutoffs are silent hallucination factories for APIs.
 
 ## The iron rule
 
 **A task must fit in one context window. If it can't, split the task, don't compress the context.**
 
-This is the single operational test for task granularity in mikrós. There is no judgment call.
+This is the single operational test for task granularity.

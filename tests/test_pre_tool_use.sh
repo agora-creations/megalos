@@ -92,4 +92,45 @@ assert_eq "" "$OUT" "missing cwd → no approval output"
 echo '{}' | bash "$HOOK_ABS" >/dev/null
 assert_exit_code 0 $? "empty JSON → exit 0"
 
+# === Gemini CLI variants ===================================================
+
+# --- Test 10 (Gemini): run_shell_command + tool_args → auto-approved ------
+OUT=$(echo '{"tool_name":"run_shell_command","tool_args":{"command":"git commit -m \"feat: bar\""},"cwd":"'"$WT"'"}' \
+  | bash "$HOOK_ABS")
+TESTS_RUN=$((TESTS_RUN + 1))
+if ! echo "$OUT" | grep -q '"permissionDecision":"allow"'; then
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+  echo "FAIL: Gemini git commit in worktree should be approved, got: $OUT" >&2
+fi
+# Also verify Gemini-compatible decision field present
+TESTS_RUN=$((TESTS_RUN + 1))
+if ! echo "$OUT" | grep -q '"decision":"allow"'; then
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+  echo "FAIL: Gemini approval should include decision:allow, got: $OUT" >&2
+fi
+
+# --- Test 11 (Gemini): run_shell_command + git add → auto-approved --------
+OUT=$(echo '{"tool_name":"run_shell_command","tool_args":{"command":"git add ."},"cwd":"'"$WT"'"}' \
+  | bash "$HOOK_ABS")
+TESTS_RUN=$((TESTS_RUN + 1))
+if ! echo "$OUT" | grep -q '"permissionDecision":"allow"'; then
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+  echo "FAIL: Gemini git add in worktree should be approved, got: $OUT" >&2
+fi
+
+# --- Test 12 (Gemini): run_shell_command + destructive → NOT approved -----
+OUT=$(echo '{"tool_name":"run_shell_command","tool_args":{"command":"git push origin main"},"cwd":"'"$WT"'"}' \
+  | bash "$HOOK_ABS")
+assert_eq "" "$OUT" "Gemini destructive git push → no approval"
+
+# --- Test 13 (Gemini): run_shell_command in main repo → no-opinion --------
+OUT=$(echo '{"tool_name":"run_shell_command","tool_args":{"command":"git commit -m foo"},"cwd":"'"$MAIN"'"}' \
+  | bash "$HOOK_ABS")
+assert_eq "" "$OUT" "Gemini git commit in main repo → no approval"
+
+# --- Test 14 (Gemini): non-shell tool name → no-opinion ------------------
+OUT=$(echo '{"tool_name":"write_file","tool_args":{"command":"git commit -m foo"},"cwd":"'"$WT"'"}' \
+  | bash "$HOOK_ABS")
+assert_eq "" "$OUT" "Gemini non-shell tool → no approval"
+
 test_summary

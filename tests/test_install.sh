@@ -1,36 +1,37 @@
 #!/usr/bin/env bash
-# Integration test: run install.sh against a throwaway target with stubbed
-# claude and docmancer binaries. Verify the expected files land in the target.
+# Integration test: run install.sh against a throwaway target.
+# Scenario 1: with stubbed claude and docmancer on PATH.
+# Scenario 2: with NO optional tools on PATH (silent skip).
 set -e
 cd "$(dirname "$0")/.."
 source tests/lib/assert.sh
 
+HERE="$PWD"
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
-TARGET="$WORK/target"
+# === Scenario 1: tools present (stubbed) ===
+
+TARGET="$WORK/target1"
 mkdir -p "$TARGET"
 
 # Stub claude and docmancer so install.sh can run without the real tools.
 mkdir -p "$WORK/bin"
-cat > "$WORK/bin/claude" <<'EOF'
+cat > "$WORK/bin/claude" <<'STUBEOF'
 #!/usr/bin/env bash
-# Accept any args, record them, and exit 0.
 echo "stub-claude: $*" >> "$WORK_BIN_LOG"
 exit 0
-EOF
-cat > "$WORK/bin/docmancer" <<'EOF'
+STUBEOF
+cat > "$WORK/bin/docmancer" <<'STUBEOF'
 #!/usr/bin/env bash
 echo "stub-docmancer: $*" >> "$WORK_BIN_LOG"
 exit 0
-EOF
+STUBEOF
 chmod +x "$WORK/bin/claude" "$WORK/bin/docmancer"
 
 export WORK_BIN_LOG="$WORK/bin.log"
 : > "$WORK_BIN_LOG"
 
-# Run install.sh.
-HERE="$PWD"
 PATH="$WORK/bin:$PATH" bash "$HERE/install.sh" "$TARGET"
 
 # --- Assertions: expected files landed in target
@@ -59,10 +60,36 @@ assert_file_contains "$TARGET/.mikros/config" "caveman_mode=on"                 
 assert_file_contains "$TARGET/.mikros/config" "caveman_phases=execute-task,sniff-test,compress" \
     "seeded config has default phases"
 
-# --- Assertions: caveman + docmancer install calls happened
+# --- Assertions: caveman + docmancer install calls happened (tools present)
 assert_file_contains "$WORK_BIN_LOG" "plugin marketplace add JuliusBrussee/caveman" "caveman marketplace call"
 assert_file_contains "$WORK_BIN_LOG" "plugin install caveman@caveman"                "caveman install call"
 assert_file_contains "$WORK_BIN_LOG" "install claude-code"                           "docmancer install call"
 assert_file_contains "$WORK_BIN_LOG" "/caveman:compress"                             "caveman-compress on CLAUDE.md"
+
+# === Scenario 2: NO optional tools on PATH ===
+
+TARGET2="$WORK/target2"
+mkdir -p "$TARGET2"
+
+# Use a PATH with no claude or docmancer — only essential system tools.
+MINIMAL_PATH="/usr/bin:/bin"
+OUTPUT="$(PATH="$MINIMAL_PATH" bash "$HERE/install.sh" "$TARGET2" 2>&1)"
+
+# --- Files still land correctly without any tools
+assert_file_exists "$TARGET2/CLAUDE.md"                                           "no-tools: CLAUDE.md copied"
+assert_file_exists "$TARGET2/.claude/settings.json"                               "no-tools: settings.json copied"
+assert_file_exists "$TARGET2/.mikros/STATE.md"                                    "no-tools: STATE.md seeded"
+assert_file_exists "$TARGET2/.mikros/config"                                      "no-tools: config seeded"
+assert_file_exists "$TARGET2/.claude/agents/phase-builder.md"                     "no-tools: phase-builder.md copied"
+
+# --- No warning messages printed for absent tools
+TESTS_RUN=$((TESTS_RUN + 1))
+if echo "$OUTPUT" | grep -qi "skipping\|not on PATH\|warning"; then
+  TESTS_FAILED=$((TESTS_FAILED + 1))
+  echo "FAIL: no-tools run printed warning about absent tools" >&2
+  echo "  output: $OUTPUT" >&2
+else
+  echo "PASS: no-tools run produced no warnings for absent tools"
+fi
 
 test_summary

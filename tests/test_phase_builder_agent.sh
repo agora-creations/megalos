@@ -23,11 +23,10 @@ assert_file_contains "$FILE" "### Files modified"           "required summary fo
 assert_file_contains "$FILE" "### Decisions"                "required summary format: Decisions"
 assert_file_contains "$FILE" "### Verification output"      "required summary format: Verification output"
 
-# docmancer grounding must be wired: tool allowed + discipline section present.
-assert_file_contains "$FILE" "Bash(docmancer:*)"             "allowlist: docmancer"
+# docmancer grounding: discipline section present (docmancer tool is optional per T01).
 assert_file_contains "$FILE" "## Grounding discipline"       "grounding discipline section present"
-assert_file_contains "$FILE" "always query docmancer"        "grounding discipline: always query"
-assert_file_contains "$FILE" 'docmancer query "<topic>"'     "grounding discipline: query example"
+assert_file_contains "$FILE" "query docmancer"                "grounding discipline: mentions docmancer"
+assert_file_contains "$FILE" "docmancer query"               "grounding discipline: query example"
 
 # Tool allowlist must cover mainstream languages. Spot-check one binary per ecosystem.
 assert_file_contains "$FILE" "Bash(git:*)"         "allowlist: git"

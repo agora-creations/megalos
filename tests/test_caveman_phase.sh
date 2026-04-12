@@ -76,6 +76,18 @@ EOF
 assert_helper "execute-task" "true"  "mode-only config: default phases apply"
 assert_helper "discuss"      "false" "mode-only config: discuss still off"
 
+# --- Empty config file (zero bytes): defaults apply (mode=on, default phases).
+: > "$SANDBOX/.mikros/config"
+assert_helper "execute-task" "true"  "empty config: execute-task active (defaults)"
+assert_helper "discuss"      "false" "empty config: discuss not active (defaults)"
+assert_helper "compress"     "true"  "empty config: compress active (defaults)"
+
+# --- Missing .mikros directory entirely: defaults apply.
+rm -rf "$SANDBOX/.mikros"
+assert_helper "execute-task" "true"  "no .mikros dir: execute-task active (defaults)"
+assert_helper "discuss"      "false" "no .mikros dir: discuss not active (defaults)"
+mkdir -p "$SANDBOX/.mikros"
+
 # --- Missing action or phase → exit 2.
 set +e
 ( cd "$SANDBOX" && bash "$HELPER" 2>/dev/null )

@@ -13,7 +13,6 @@ assert_file_contains "$FILE" "Heavy orchestration" "has Heavy orchestration sect
 assert_file_contains "$FILE" "single implementation" "has single-impl rule"
 assert_file_contains "$FILE" "Three-strikes"         "has three-strikes rule"
 assert_file_contains "$FILE" "Boring"                "has boring-is-feature rule"
-assert_file_contains "$FILE" "always query docmancer" "has strict docmancer grounding rule"
-assert_file_contains "$FILE" "not \"when uncertain\"" "docmancer rule is strict, not conditional"
+assert_file_contains "$FILE" "fabricate API signatures" "has API grounding rule"
 
 test_summary
