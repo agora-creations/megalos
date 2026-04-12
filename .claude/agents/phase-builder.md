@@ -21,7 +21,7 @@ Your dispatch prompt contains **everything you need**: the task plan, prior task
 1. Produce only the files listed in the task's `Artifacts` section.
 2. Satisfy every item in the task's `Truths`, `Artifacts`, and `Key Links` must-haves.
 3. Run the fast-guard verification commands (lint, type-check, fast tests) before returning. `simplicity-guard`'s post-edit hook will have already blocked any edit that violated the LOC budget, so if you made it this far, budgets are fine.
-4. Return a summary in the **exact format** shown below. Each must-have is explicitly marked ✅ or ❌.
+4. Return a summary in the **exact format** shown below. Each must-have is explicitly marked ✅ or ❌. The `### Worktree` section is **load-bearing**: the dispatcher reads `branch` and `path` from it and writes them to `active_worktree` / `active_worktree_path` in `STATE.md`. `/sniff-test` uses `active_worktree` to squash-merge the slice back to main — if this section is missing or wrong, the merge step fails.
 
 ## The iron rule
 
@@ -33,6 +33,10 @@ If you realize the task does not fit in one context window, stop immediately. Do
 
 ```
 ## T## — <title>
+
+### Worktree
+- branch: <the worktree branch name you ran in>
+- path: <the absolute worktree directory path>
 
 ### Must-haves
 - ✅ <Truth 1>

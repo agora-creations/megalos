@@ -46,6 +46,10 @@ The `phase-builder` subagent is defined with `isolation: worktree`, `maxTurns: 3
 The subagent will return a summary in the required format (see `.claude/agents/phase-builder.md`). Save it to disk:
 
 - Write `.mikros/plans/M###/S##/T##-SUMMARY.md` via atomic write-then-rename (tmp file, `mv`).
+- Parse the `### Worktree` section of the summary and extract `branch` and `path`. Write both to `.mikros/STATE.md`:
+  - `active_worktree:` ← branch name
+  - `active_worktree_path:` ← absolute worktree path
+  (Atomic write-then-rename as usual.)
 - If the summary's `### Decisions` section is non-empty, append each decision (with today's date header) to `.mikros/DECISIONS.md` atomically.
 - If the summary includes a `### Gotchas` section (optional; appears only when the subagent hit a failure mode), append those to `.claude/skills/simplicity-guard/references/gotchas.md`.
 
