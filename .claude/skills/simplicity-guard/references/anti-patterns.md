@@ -30,6 +30,8 @@
 
 **Boring is a feature.** Clever code loses to boring code that the next reader (human or AI) can understand in ten seconds.
 
+**Don't fabricate API signatures — always query docmancer.** Before writing code that touches any external library, CLI, or framework API, run `docmancer query "<topic>"` and read the returned chunks. This is not "when uncertain" — it is every time. Training-data cutoffs are silent hallucination factories for APIs. If `docmancer` is not on PATH, or its local index has no chunks for the topic, note that explicitly in the task's `### Decisions` section and proceed with the smallest safe surface area.
+
 ## The iron rule
 
 **A task must fit in one context window. If it can't, split the task, don't compress the context.**
