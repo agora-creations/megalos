@@ -26,10 +26,8 @@ class TestDecisionHappyPath:
                 assert r["status"] == "workflow_complete"
 
         art = call_tool("generate_artifact", {"session_id": sid})
-        assert art["output_format"] == "text"
-        assert isinstance(art["artifact"], str)
-        for step_id in STEPS:
-            assert f"decision-{step_id}" in art["artifact"]
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "decision-document"
 
 
 class TestDecisionDirectiveContent:

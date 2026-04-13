@@ -26,10 +26,8 @@ class TestBlogHappyPath:
                 assert r["status"] == "workflow_complete"
 
         art = call_tool("generate_artifact", {"session_id": sid})
-        assert art["output_format"] == "text"
-        assert isinstance(art["artifact"], str)
-        for step_id in STEPS:
-            assert f"blog-{step_id}" in art["artifact"]
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "blog-polish"
 
 
 class TestBlogDirectiveContent:

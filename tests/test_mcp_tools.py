@@ -33,12 +33,17 @@ class TestFullWorkflow:
         assert st["progress"] == "unknown"  # __complete__ has no index
         assert len(st["step_data"]) == 6
 
-        # Generate artifact
+        # Generate artifact — auto returns last step only
         art = call_tool("generate_artifact", {"session_id": sid})
-        assert art["output_format"] == "structured_code"
-        assert len(art["artifact"]) == 6
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "content-deliver"
+
+        # Explicit structured_code still returns all steps
+        art2 = call_tool("generate_artifact", {"session_id": sid, "output_format": "structured_code"})
+        assert art2["output_format"] == "structured_code"
+        assert len(art2["artifact"]) == 6
         for step_id in STEPS:
-            contents = [s["content"] for s in art["artifact"]]
+            contents = [s["content"] for s in art2["artifact"]]
             assert f"content-{step_id}" in contents
 
 

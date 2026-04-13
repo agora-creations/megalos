@@ -27,12 +27,10 @@ class TestEssayHappyPath:
             else:
                 assert r["status"] == "workflow_complete"
 
-        # Generate artifact — must be text, not structured_code
+        # Generate artifact — auto returns last step only
         art = call_tool("generate_artifact", {"session_id": sid})
-        assert art["output_format"] == "text"
-        assert isinstance(art["artifact"], str)
-        for step_id in STEPS:
-            assert f"essay-{step_id}" in art["artifact"]
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "essay-polish"
 
 
 class TestEssayOutOfOrder:
@@ -73,20 +71,19 @@ class TestEssayTextArtifact:
         for step_id in STEPS:
             call_tool("submit_step", {"session_id": sid, "step_id": step_id, "content": f"part-{step_id}"})
 
-        art = call_tool("generate_artifact", {"session_id": sid})
+        art = call_tool("generate_artifact", {"session_id": sid, "output_format": "text"})
         assert art["output_format"] == "text"
         assert isinstance(art["artifact"], str)
         # Text format joins with double newline
         assert "part-explore" in art["artifact"]
         assert "part-polish" in art["artifact"]
 
-    def test_auto_format_resolves_to_text(self):
+    def test_auto_format_returns_last_step(self):
         r = call_tool("start_workflow", {"workflow_type": "essay", "context": "test"})
         sid = r["session_id"]
         for step_id in STEPS:
-            call_tool("submit_step", {"session_id": sid, "step_id": step_id, "content": "x"})
+            call_tool("submit_step", {"session_id": sid, "step_id": step_id, "content": f"auto-{step_id}"})
 
-        # output_format="auto" should resolve to "text" for essay workflow
         art = call_tool("generate_artifact", {"session_id": sid, "output_format": "auto"})
-        assert art["output_format"] == "text"
-        assert isinstance(art["artifact"], str)
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "auto-polish"

@@ -31,8 +31,8 @@ class TestFullWorkflow:
         assert len(st["step_data"]) == 6
 
         art = call_tool("generate_artifact", {"session_id": sid})
-        assert art["output_format"] == "text"
-        assert isinstance(art["artifact"], str)
+        assert art["output_format"] == "auto"
+        assert art["artifact"] == "content-refine"
 
 
 class TestDirectiveContent:

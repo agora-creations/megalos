@@ -234,7 +234,7 @@ def register_tools(mcp, workflows):
         """Generate final artifact from completed workflow. Rejects if workflow is not complete.
 
         output_format controls the shape of the returned artifact:
-        - "auto" (default): uses the workflow's output_format field; falls back to "text" if not set.
+        - "auto" (default): returns the raw content of the last step only.
         - "text": joins all step contents into a single string separated by double newlines.
         - "structured_code": returns a list of dicts, each with keys step_id, title, and content.
         """
@@ -252,11 +252,13 @@ def register_tools(mcp, workflows):
                 "remaining_steps": remaining,
             }
 
-        fmt = output_format if output_format != "auto" else wf.get("output_format", "text")
         step_data = session["step_data"]
 
-        if fmt == "structured_code":
-            artifact: object = [
+        if output_format == "auto":
+            last_step_id = wf["steps"][-1]["id"]
+            artifact: object = step_data.get(last_step_id, "")
+        elif output_format == "structured_code":
+            artifact = [
                 {"step_id": s["id"], "title": s["title"], "content": step_data.get(s["id"], "")}
                 for s in wf["steps"]
             ]
@@ -266,6 +268,6 @@ def register_tools(mcp, workflows):
         return {
             "session_id": session_id,
             "workflow_type": session["workflow_type"],
-            "output_format": fmt,
+            "output_format": output_format,
             "artifact": artifact,
         }
