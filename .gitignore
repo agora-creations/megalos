@@ -15,6 +15,7 @@ tests/*.out
 .pytest_cache/
 __pycache__/
 .venv/
+uv.lock
 
 # Runtime DB
 server/mikros_sessions.db

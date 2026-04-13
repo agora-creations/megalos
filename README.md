@@ -2,7 +2,10 @@
 
 > μικρός (ancient Greek: *small*)
 
-A portable workflow template for AI coding assistants that prevents over-engineering and controls token cost. Works with **Claude Code** and **Gemini CLI**. Drop it into any project via `install.sh` and you get five slash commands, one subagent, two hooks, one anti-bloat skill, and a Python state machine. No harness, no TypeScript, no build step.
+A structured workflow system for AI assistants that prevents over-engineering and controls token cost. Two runtimes:
+
+1. **Terminal** — drop-in workflow template for **Claude Code** and **Gemini CLI**. Five slash commands, one subagent, two hooks, one anti-bloat skill, and a Python state machine. No harness, no TypeScript, no build step.
+2. **MCP Server** — remote FastMCP server that brings the same structured workflows to **Claude chat** on any device, including mobile. The server is the state machine; Claude is the UI layer.
 
 ## The thesis
 
@@ -20,7 +23,28 @@ Optional plugins:
 
 Both are fully optional. Their absence is a clean no-op.
 
-## Install
+## MCP Server
+
+The MCP server makes structured workflows portable to Claude chat. Paste a URL, start a workflow, and Claude guides you through each step with explicit directives — no markdown instructions to drift from.
+
+**Quick start:** see [`server/README.md`](server/README.md) for setup (2 minutes), deployment, and usage.
+
+**Architecture:**
+- FastMCP (Python ≥3.10) with Streamable HTTP transport
+- 5 tools: `start_workflow`, `submit_step`, `get_state`, `get_guidelines`, `generate_artifact`
+- Workflow definitions in YAML — add a new workflow by adding a file, not code
+- SQLite session persistence
+
+**Workflows:**
+
+| Workflow | Steps | Output |
+|----------|-------|--------|
+| coding | discuss → plan → execute → review → iterate → deliver | code artifacts |
+| essay | explore → commit → structure → draft → revise → polish | text |
+
+## Terminal Workflow
+
+### Install
 
 ```bash
 git clone https://github.com/aut0didakt0s/mikros.git
@@ -38,15 +62,15 @@ What it does:
 - Copies `simplicity-guard/` standalone directory
 - Optionally installs caveman plugin and docmancer skill if available
 
-## Prerequisites
+### Prerequisites
 
 - `bash` 4.0+, `git`, `python3` 3.8+, `jq`
 - One of: `claude` CLI (Claude Code) or `gemini` CLI (Gemini CLI)
 - `ruff` and `mypy` (used by the post-edit hook for Python files)
 
-## The workflow
+### The workflow
 
-Every mikrós project follows the same five steps per slice:
+Every mikrós project follows the same five steps per slice. In the case of the coding workflow:
 
 1. `/discuss <topic>` — capture intent before code. Writes `DECISIONS.md` and milestone context.
 2. `/plan-slice <S##>` — decompose into tasks with must-haves. Enforces the iron rule.
@@ -69,9 +93,9 @@ State lives on disk under `.mikros/` and is managed by `mikros.py`:
             └── T01-SUMMARY.md
 ```
 
-Every command reads state from disk, writes atomically via `tmp file + mv`, and never keeps state in conversation context. Each task runs in an isolated git worktree. This is how mikros survives long sessions without context rot.
+Every command reads state from disk, writes atomically via `tmp file + mv`, and never keeps state in conversation context. Each task runs in an isolated git worktree. This is how mikrós survives long sessions without context rot.
 
-## simplicity-guard
+### simplicity-guard
 
 The anti-bloat skill is distributed as a standalone directory that works with both runtimes:
 
