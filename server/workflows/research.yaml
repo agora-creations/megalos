@@ -6,7 +6,8 @@ steps:
   - id: frame
     title: Frame the Research Question
     directive_template: >-
-      Help the user sharpen their research question into something answerable.
+      First, ask the user what topic they want to research. Do NOT guess or infer the topic from the tool name, prior conversation, or the context field — wait for the user to state it.
+      Then help the user sharpen their research question into something answerable.
       Identify what they already know, what they need to find out, and what scope is realistic.
       Do NOT accept a vague topic as a research question — it must be specific and bounded.
       Do NOT let the user skip defining what counts as a good answer.

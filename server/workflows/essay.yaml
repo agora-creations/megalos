@@ -6,7 +6,8 @@ steps:
   - id: explore
     title: Explore and Invent
     directive_template: >-
-      Help the user explore their topic through open-ended questions.
+      First, ask the user what topic they want to write about. Do NOT guess or infer the topic from the tool name, prior conversation, or the context field — wait for the user to state it.
+      Then help the user explore their topic through open-ended questions.
       Surface what they already know, what interests them, and what tensions exist.
       Do NOT propose a thesis yet — invention precedes commitment.
       Do NOT narrow the topic before the user has explored at least two angles.

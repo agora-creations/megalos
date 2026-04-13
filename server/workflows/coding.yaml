@@ -6,7 +6,8 @@ steps:
   - id: discuss
     title: Capture Intent
     directive_template: >-
-      Ask the user ONE question at a time about what they want to build.
+      First, ask the user what they want to build. Do NOT guess or infer the topic from the tool name, prior conversation, or the context field — wait for the user to state it.
+      Then ask ONE question at a time to clarify.
       Cover: the goal, constraints, and what "done" looks like.
       Do NOT ask multiple questions in one message.
       Do NOT start planning or writing code.

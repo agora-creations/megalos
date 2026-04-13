@@ -6,7 +6,8 @@ steps:
   - id: angle
     title: Find the Angle and Hook
     directive_template: >-
-      Help the user find a compelling angle for their blog post.
+      First, ask the user what they want to write about. Do NOT guess or infer the topic from the tool name, prior conversation, or the context field — wait for the user to state it.
+      Then help the user find a compelling angle for their blog post.
       Explore what makes this topic interesting, timely, or surprising.
       Identify a hook that would make a reader stop scrolling and start reading.
       Do NOT settle on the first angle — explore at least two before committing.

@@ -6,7 +6,8 @@ steps:
   - id: frame
     title: Frame the Decision
     directive_template: >-
-      Help the user clearly articulate the decision they need to make.
+      First, ask the user what decision they need to make. Do NOT guess or infer the topic from the tool name, prior conversation, or the context field — wait for the user to state it.
+      Then help the user clearly articulate the decision.
       Clarify scope, timeline, and who is affected by the outcome.
       Do NOT jump to listing options before the decision is framed.
       Do NOT accept vague framing like "figure out what to do" — push for specifics.
