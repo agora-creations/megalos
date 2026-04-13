@@ -152,7 +152,6 @@ def register_tools(mcp, workflows):
         steps = wf["steps"]
         idx, step = _find_step(wf, step_id)
 
-        # Store content
         step_data = session["step_data"]
         step_data[step_id] = content
 
@@ -191,17 +190,14 @@ def register_tools(mcp, workflows):
         if target_idx < 0:
             return {"error": f"Step '{step_id}' not found in workflow", "session_id": session_id}
 
-        # Target must have been completed (its data must exist)
         if step_id not in session["step_data"]:
             return {"error": f"Step '{step_id}' has not been completed yet", "session_id": session_id}
 
         previous_content = session["step_data"][step_id]
 
-        # Delete step_data for all steps after target
         steps_after = [s["id"] for s in wf["steps"][target_idx + 1:]]
         state.invalidate_steps_after(session_id, steps_after)
 
-        # Reset current_step to target
         state.update_session(session_id, current_step=step_id)
 
         return {

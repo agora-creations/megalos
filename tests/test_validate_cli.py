@@ -16,7 +16,7 @@ def test_valid_workflow_no_errors():
     """All five built-in workflows pass validation."""
     for name in ("coding", "essay", "blog", "decision", "research"):
         path = os.path.join(WORKFLOWS_DIR, f"{name}.yaml")
-        errors = validate_workflow(path)
+        errors, _ = validate_workflow(path)
         assert errors == [], f"{name}.yaml had errors: {errors}"
 
 
@@ -69,6 +69,6 @@ def test_multiple_errors_reported():
         # Missing name, description, category, output_format + bad step
         f.write("steps:\n  - id: s1\n")
         f.flush()
-        errors = validate_workflow(f.name)
+        errors, _ = validate_workflow(f.name)
     os.unlink(f.name)
     assert len(errors) >= 3  # at least name, description, category missing + step errors
