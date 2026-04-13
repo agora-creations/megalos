@@ -1,6 +1,6 @@
 """MCP tool functions for mikros workflow engine."""
 
-from . import state
+from server import state
 
 _COMPLETE = "__complete__"
 

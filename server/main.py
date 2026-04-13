@@ -1,9 +1,18 @@
 """mikros MCP server — workflow-driven coding assistant."""
 
+import sys
 from pathlib import Path
-from fastmcp import FastMCP
-from .schema import load_workflow
-from .tools import register_tools
+
+# FastMCP's CLI loads this file directly (not via python -m), so the
+# parent dir isn't automatically on sys.path. Add it so `server.*`
+# absolute imports resolve. Same pattern used in tests/conftest.py.
+_app_root = str(Path(__file__).resolve().parent.parent)
+if _app_root not in sys.path:
+    sys.path.insert(0, _app_root)
+
+from fastmcp import FastMCP  # noqa: E402
+from server.schema import load_workflow  # noqa: E402
+from server.tools import register_tools  # noqa: E402
 
 mcp = FastMCP("mikros")
 
