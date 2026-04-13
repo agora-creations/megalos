@@ -1,0 +1,93 @@
+name: coding
+description: Guided coding workflow — from intent capture to delivered artifacts.
+output_format: structured_code
+
+steps:
+  - id: discuss
+    title: Capture Intent
+    directive_template: >-
+      Ask the user ONE question at a time about what they want to build.
+      Cover: the goal, constraints, and what "done" looks like.
+      Do NOT ask multiple questions in one message.
+      Do NOT start planning or writing code.
+      When you have clear answers for all three (goal, constraints, done), submit this step.
+    gates:
+      - User has stated what they want to build
+      - Success criteria are defined
+    anti_patterns:
+      - Jumping to code before understanding intent
+      - Assuming requirements not stated
+
+  - id: plan
+    title: Decompose and Structure
+    directive_template: >-
+      Break the work into components and define the file structure.
+      List each component with a one-line description of its responsibility.
+      Do NOT write any implementation code yet.
+      Do NOT create abstractions until you have three concrete uses.
+      Submit when all components are identified and files are mapped.
+    gates:
+      - Components are identified
+      - File structure is defined
+    anti_patterns:
+      - Over-engineering the plan
+      - Creating abstractions before three uses
+
+  - id: execute
+    title: Produce Code Artifacts
+    directive_template: >-
+      Implement each component from the plan, one at a time.
+      Write the simplest code that satisfies the requirements — boring beats clever.
+      Do NOT add features not in the plan.
+      Do NOT introduce dependencies unless explicitly required.
+      Submit when all planned components are implemented and code runs without syntax errors.
+    gates:
+      - All planned components are implemented
+      - Code runs without syntax errors
+    anti_patterns:
+      - Gold-plating beyond requirements
+      - Introducing unneeded dependencies
+
+  - id: review
+    title: Check Against Requirements
+    directive_template: >-
+      Walk through each requirement from the discuss step and verify the code satisfies it.
+      List every requirement with a pass/fail and note any gaps found.
+      Do NOT fix issues yet — only identify them.
+      Do NOT add new requirements that were not in the original intent.
+      Submit when every requirement is mapped to code and all gaps are listed.
+    gates:
+      - Each requirement is mapped to code
+      - Gaps are identified
+    anti_patterns:
+      - Rubber-stamping without checking
+      - Scope creep during review
+
+  - id: iterate
+    title: Fix Issues
+    directive_template: >-
+      Address each gap identified in the review step with the minimal fix needed.
+      Do NOT rewrite working code — fix only what is broken or missing.
+      Do NOT introduce changes beyond what the review identified.
+      Submit when all review findings are resolved and no new issues are introduced.
+    gates:
+      - All review findings are addressed
+      - No new issues introduced
+    anti_patterns:
+      - Rewriting instead of fixing
+      - Ignoring edge cases found in review
+
+  - id: deliver
+    title: Final Output
+    directive_template: >-
+      Format all artifacts for user consumption: complete files, clear names, ready to use.
+      Verify every artifact from the plan is present in the output.
+      Do NOT skip the final check — confirm the output matches what the user asked for.
+      Do NOT omit any files or components.
+      Submit when the output is complete and formatted.
+    gates:
+      - Output is formatted for user consumption
+      - All artifacts are present
+    anti_patterns:
+      - Delivering without final check
+      - Missing files from output
