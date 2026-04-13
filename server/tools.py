@@ -1,7 +1,13 @@
 """MCP tool functions for mikros workflow engine."""
 
+import json
+
+import jsonschema
+
 from server import state
 from server.state import COMPLETE as _COMPLETE
+
+_DEFAULT_MAX_RETRIES = 3
 
 _DO_NOT_RULES = [
     "Do NOT skip ahead to later steps.",
@@ -32,6 +38,54 @@ def _resolve_session(session_id, workflows):
     if not wf:
         return None, {"error": f"Workflow '{session['workflow_type']}' not loaded", "session_id": session_id}
     return (session, wf), None
+
+
+def _validate_output(content: str, step: dict) -> list[str] | None:
+    """Validate content against step's output_schema. Returns error list or None if valid/no schema."""
+    output_schema = step.get("output_schema")
+    if not output_schema:
+        return None
+    try:
+        parsed = json.loads(content)
+    except (json.JSONDecodeError, TypeError) as e:
+        return [f"Content is not valid JSON: {e}"]
+    validator = jsonschema.Draft202012Validator(output_schema)
+    errors = [err.message for err in validator.iter_errors(parsed)]
+    return errors if errors else None
+
+
+_SUMMARY_LIMIT = 500
+
+
+def _assemble_context(inject_context: list[dict], step_data: dict) -> list[dict]:
+    """Build injected context from inject_context spec and stored step_data."""
+    result = []
+    for entry in inject_context:
+        source_id = entry["from"]
+        raw = step_data.get(source_id)
+        if raw is None:
+            result.append({"from": source_id, "content": None})
+            continue
+
+        # Try to parse as JSON for field filtering
+        parsed = None
+        try:
+            parsed = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        fields = entry.get("fields")
+        if fields and isinstance(parsed, dict):
+            content = {k: parsed.get(k) for k in fields}
+            item = {"from": source_id, "fields": content}
+        else:
+            content = raw
+            if entry.get("summary") and len(content) > _SUMMARY_LIMIT:
+                content = content[:_SUMMARY_LIMIT] + "[truncated]"
+            item = {"from": source_id, "content": content}
+
+        result.append(item)
+    return result
 
 
 def register_tools(mcp, workflows):
@@ -76,7 +130,7 @@ def register_tools(mcp, workflows):
         first_step = wf["steps"][0]
         sid = state.create_session(workflow_type, current_step=first_step["id"])
 
-        return {
+        result = {
             "session_id": sid,
             "workflow_type": workflow_type,
             "current_step": {"id": first_step["id"], "title": first_step["title"]},
@@ -85,6 +139,9 @@ def register_tools(mcp, workflows):
             "gates": first_step["gates"],
             "context": context,
         }
+        if first_step.get("directives"):
+            result["directives"] = first_step["directives"]
+        return result
 
     @mcp.tool()
     def get_state(session_id: str) -> dict:
@@ -98,7 +155,7 @@ def register_tools(mcp, workflows):
         idx, current = _find_step(wf, session["current_step"])
         pending = [s["title"] for s in steps[idx + 1:]] if idx >= 0 else []
 
-        return {
+        result = {
             "session_id": session_id,
             "workflow_type": session["workflow_type"],
             "current_step": {"id": current["id"], "title": current["title"]} if current else None,
@@ -106,6 +163,11 @@ def register_tools(mcp, workflows):
             "pending_steps": pending,
             "step_data": session["step_data"],
         }
+        if current and current.get("inject_context"):
+            result["injected_context"] = _assemble_context(current["inject_context"], session["step_data"])
+        if current and current.get("directives"):
+            result["directives"] = current["directives"]
+        return result
 
     @mcp.tool()
     def get_guidelines(session_id: str) -> dict:
@@ -152,6 +214,32 @@ def register_tools(mcp, workflows):
         steps = wf["steps"]
         idx, step = _find_step(wf, step_id)
 
+        # Validate against output_schema if present
+        validation_errors = _validate_output(content, step)
+        if validation_errors is not None:
+            max_retries = step.get("max_retries", _DEFAULT_MAX_RETRIES)
+            retry_count = state.increment_retry(session_id, step_id)
+            if retry_count >= max_retries:
+                return {
+                    "status": "validation_error",
+                    "errors": validation_errors,
+                    "session_id": session_id,
+                    "step_id": step_id,
+                    "retries_exhausted": True,
+                    "message": f"Max retries ({max_retries}) exceeded. Workflow stalled.",
+                }
+            err_result: dict = {
+                "status": "validation_error",
+                "errors": validation_errors,
+                "session_id": session_id,
+                "step_id": step_id,
+                "retries_remaining": max_retries - retry_count,
+            }
+            hint = step.get("validation_hint")
+            if hint:
+                err_result["validation_hint"] = hint
+            return err_result
+
         step_data = session["step_data"]
         step_data[step_id] = content
 
@@ -174,6 +262,10 @@ def register_tools(mcp, workflows):
             result["directive"] = nxt["directive_template"]
             result["do_not"] = _DO_NOT_RULES
             result["gates"] = nxt["gates"]
+            if nxt.get("inject_context"):
+                result["injected_context"] = _assemble_context(nxt["inject_context"], step_data)
+            if nxt.get("directives"):
+                result["directives"] = nxt["directives"]
 
         return result
 

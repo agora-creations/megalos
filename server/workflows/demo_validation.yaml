@@ -1,0 +1,47 @@
+name: demo_validation
+description: Demo workflow for output schema validation — tests rejection loop.
+category: demo
+output_format: structured
+
+steps:
+  - id: collect_info
+    title: Collect Project Information
+    directive_template: >-
+      Ask the user for their project title, at least three goals, and confirmation.
+      Submit structured JSON matching the output schema.
+    gates:
+      - User provided project title
+      - User listed at least three goals
+      - User confirmed the information
+    anti_patterns:
+      - Accepting fewer than three goals
+      - Submitting without user confirmation
+    output_schema:
+      type: object
+      required:
+        - title
+        - goals
+        - confirmed
+      properties:
+        title:
+          type: string
+          minLength: 3
+        goals:
+          type: array
+          minItems: 3
+          items:
+            type: string
+        confirmed:
+          type: boolean
+          const: true
+    validation_hint: "Submit JSON with title (string, 3+ chars), goals (array of 3+ strings), and confirmed (must be boolean true)."
+    max_retries: 3
+
+  - id: summarize
+    title: Summarize the Project
+    directive_template: >-
+      Summarize the project information collected in the previous step.
+    gates:
+      - Summary is clear and concise
+    anti_patterns:
+      - Being too verbose

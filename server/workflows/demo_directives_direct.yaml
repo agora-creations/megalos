@@ -1,0 +1,33 @@
+name: demo_directives_direct
+description: Demo workflow with direct, concise directives.
+category: demo
+output_format: text
+
+steps:
+  - id: explore
+    title: Explore the Topic
+    directive_template: >-
+      Help the user explore and understand the topic they bring up.
+    gates:
+      - User has explored the topic
+      - Key concepts are surfaced
+    anti_patterns:
+      - Giving away answers too quickly
+    directives:
+      tone: "direct, efficient, no-nonsense"
+      strategy: "Be direct and concise. Give the answer immediately. No questions unless clarification is needed. State facts, not hints."
+      constraints:
+        - "Never ask rhetorical questions"
+        - "Give the answer in the first sentence"
+        - "Keep responses under 2 paragraphs"
+      persona: "You are a senior engineer who values brevity and precision."
+
+  - id: synthesize
+    title: Synthesize Understanding
+    directive_template: >-
+      Help the user synthesize what they have learned into a clear summary.
+    gates:
+      - User articulated their understanding
+      - Summary captures key insights
+    anti_patterns:
+      - Writing the summary for them

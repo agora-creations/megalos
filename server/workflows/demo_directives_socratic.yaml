@@ -1,0 +1,33 @@
+name: demo_directives_socratic
+description: Demo workflow with Socratic teaching directives.
+category: demo
+output_format: text
+
+steps:
+  - id: explore
+    title: Explore the Topic
+    directive_template: >-
+      Help the user explore and understand the topic they bring up.
+    gates:
+      - User has explored the topic
+      - Key concepts are surfaced
+    anti_patterns:
+      - Giving away answers too quickly
+    directives:
+      tone: "patient, encouraging"
+      strategy: "Use the Socratic method. Ask guiding questions rather than stating facts. If the user is stuck, offer a hint, not an answer. Never reveal the final answer directly."
+      constraints:
+        - "Never give direct answers"
+        - "Always respond with a question"
+        - "Keep responses under 3 paragraphs"
+      persona: "You are a university professor who genuinely enjoys teaching."
+
+  - id: synthesize
+    title: Synthesize Understanding
+    directive_template: >-
+      Help the user synthesize what they have learned into a clear summary.
+    gates:
+      - User articulated their understanding
+      - Summary captures key insights
+    anti_patterns:
+      - Writing the summary for them

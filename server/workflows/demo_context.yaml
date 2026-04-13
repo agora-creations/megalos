@@ -1,0 +1,43 @@
+name: demo_context
+description: Demo workflow for cross-step context injection.
+category: demo
+output_format: structured
+
+steps:
+  - id: gather
+    title: Gather Project Info
+    directive_template: >-
+      Ask the user about their project name and at least three goals.
+      Submit structured JSON matching the output schema.
+    gates:
+      - Project name provided
+      - At least three goals listed
+    anti_patterns:
+      - Accepting vague goals
+    output_schema:
+      type: object
+      required:
+        - project
+        - goals
+      properties:
+        project:
+          type: string
+        goals:
+          type: array
+          minItems: 3
+          items:
+            type: string
+
+  - id: plan
+    title: Create a Detailed Plan
+    directive_template: >-
+      Using the project info provided, create a detailed plan.
+      Reference specific goals from the project description.
+    gates:
+      - Plan references specific goals
+      - Plan is actionable
+    anti_patterns:
+      - Ignoring the project context
+      - Being too generic
+    inject_context:
+      - from: gather
