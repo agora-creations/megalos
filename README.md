@@ -6,7 +6,6 @@
 
 ## Contents
 
-- [Installation](#installation)
 - [The thesis](#the-thesis)
 - [Architecture — three layers](#architecture--three-layers)
 - [The YAML schema](#the-yaml-schema)
@@ -23,45 +22,6 @@
 - [Optional plugins](#optional-plugins)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
-
-## Installation
-
-Add the megálos MCP server as a connector in any MCP-compatible client — no install or local setup needed.
-
-**Claude web**
-```
-https://Megalos.fastmcp.app/mcp
-```
-
-**Claude desktop**
-```
-https://Megalos.fastmcp.app/manifest.dxt?v=642267e3-c18f-42ae-b301-f18b234668a2
-```
-
-**Claude Code**
-```
-claude mcp add --scope local --transport http Megalos https://Megalos.fastmcp.app/mcp
-```
-
-**Codex**
-```
-codex mcp add --url https://Megalos.fastmcp.app/mcp Megalos
-```
-
-**Gemini CLI**
-```
-gemini mcp add Megalos https://Megalos.fastmcp.app/mcp --transport http
-```
-
-**Cursor**
-```
-cursor://anysphere.cursor-deeplink/mcp/install?name=Megalos&config=eyJ1cmwiOiJodHRwczovL01lZ2Fsb3MuZmFzdG1jcC5hcHAvbWNwIn0%3D
-```
-
-**VS Code**
-```
-code --add-mcp "{\"name\":\"Megalos\",\"type\":\"http\",\"url\":\"https://Megalos.fastmcp.app/mcp\"}"
-```
 
 ## The thesis
 
