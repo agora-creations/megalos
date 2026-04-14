@@ -78,7 +78,7 @@ Domain repos and downstream consumers depend on the runtime via a pinned git URL
 ```toml
 [project]
 dependencies = [
-    "mikros-server @ git+https://github.com/aut0didakt0s/mikros.git@v0.1.0",
+    "mikros-server @ git+https://github.com/real-agora/mikros.git@v0.1.0",
 ]
 ```
 
@@ -110,9 +110,9 @@ Workflows are grouped by **category**, and each category lives in its own MCP se
 
 | Server | Category | Workflows | Remote |
 |--------|----------|-----------|--------|
-| `mikros-writing` | writing & communication | essay, blog | [github.com/aut0didakt0s/mikros-writing](https://github.com/aut0didakt0s/mikros-writing) |
-| `mikros-analysis` | analysis & decision | research, decision | [github.com/aut0didakt0s/mikros-analysis](https://github.com/aut0didakt0s/mikros-analysis) |
-| `mikros-professional` | professional | coding | [github.com/aut0didakt0s/mikros-professional](https://github.com/aut0didakt0s/mikros-professional) |
+| `mikros-writing` | writing & communication | essay, blog | [github.com/real-agora/mikros-writing](https://github.com/real-agora/mikros-writing) |
+| `mikros-analysis` | analysis & decision | research, decision | [github.com/real-agora/mikros-analysis](https://github.com/real-agora/mikros-analysis) |
+| `mikros-professional` | professional | coding | [github.com/real-agora/mikros-professional](https://github.com/real-agora/mikros-professional) |
 
 This repo itself bundles only `mikros_server/workflows/example.yaml` as a reference workflow plus `tests/fixtures/workflows/` (one canonical 3-step framework fixture plus seven demo fixtures exercising M004/M005 features). Production workflows live exclusively in their category-specific repos.
 
