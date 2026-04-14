@@ -8,17 +8,6 @@ from mikros_server.schema import load_workflow
 from mikros_server.tools import register_tools
 
 
-def _load_workflows(wf_path: Path) -> dict[str, dict]:
-    """Load all *.yaml workflows from wf_path. Raises RuntimeError if none found."""
-    workflows: dict[str, dict] = {}
-    for yaml_path in wf_path.glob("*.yaml"):
-        wf = load_workflow(str(yaml_path))
-        workflows[wf["name"]] = wf
-    if not workflows:
-        raise RuntimeError(f"No workflow YAML files found in {wf_path}")
-    return workflows
-
-
 def create_app(workflow_dir: str | Path | None = None) -> FastMCP:
     """Create a FastMCP app with workflows loaded from `workflow_dir`.
 
@@ -26,7 +15,12 @@ def create_app(workflow_dir: str | Path | None = None) -> FastMCP:
     Raises RuntimeError if the resolved directory contains no YAML files.
     """
     wf_path = Path(workflow_dir) if workflow_dir else Path(__file__).parent / "workflows"
-    workflows = _load_workflows(wf_path)
+    workflows: dict[str, dict] = {}
+    for yaml_path in wf_path.glob("*.yaml"):
+        wf = load_workflow(str(yaml_path))
+        workflows[wf["name"]] = wf
+    if not workflows:
+        raise RuntimeError(f"No workflow YAML files found in {wf_path}")
     mcp = FastMCP("mikros")
     register_tools(mcp, workflows)
     # Attach workflows dict for introspection / test mutation. Underscore = private.
