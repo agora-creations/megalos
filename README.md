@@ -74,7 +74,7 @@ Determinism comes from gates in the runtime, not from prompt engineering. The MC
 |-------|------------|--------|
 | **mikrós** (this repo) | YAML schema, MCP server runtime (`mikros-server` package), validation tooling, simplicity-guard | live |
 | **mikrós-{domain}** | Per-domain MCP servers built on the runtime | live: writing, analysis, professional |
-| **real-agora** | Bring-your-own-key chat client (web first, mobile later) | future |
+| **agora-creations** | Bring-your-own-key chat client (BYOK) | future |
 
 ## The YAML schema
 
@@ -107,7 +107,7 @@ Domain repos and downstream consumers depend on the runtime via a pinned git URL
 ```toml
 [project]
 dependencies = [
-    "mikros-server @ git+https://github.com/real-agora/mikros.git@v0.1.0",
+    "mikros-server @ git+https://github.com/agora-creations/mikros.git@v0.1.0",
 ]
 ```
 
@@ -139,9 +139,9 @@ Workflows are grouped by **category**, and each category lives in its own MCP se
 
 | Server | Category | Workflows | Remote |
 |--------|----------|-----------|--------|
-| `mikros-writing` | writing & communication | essay, blog | [github.com/real-agora/mikros-writing](https://github.com/real-agora/mikros-writing) |
-| `mikros-analysis` | analysis & decision | research, decision | [github.com/real-agora/mikros-analysis](https://github.com/real-agora/mikros-analysis) |
-| `mikros-professional` | professional | coding | [github.com/real-agora/mikros-professional](https://github.com/real-agora/mikros-professional) |
+| `mikros-writing` | writing & communication | essay, blog | [github.com/agora-creations/mikros-writing](https://github.com/agora-creations/mikros-writing) |
+| `mikros-analysis` | analysis & decision | research, decision | [github.com/agora-creations/mikros-analysis](https://github.com/agora-creations/mikros-analysis) |
+| `mikros-professional` | professional | coding | [github.com/agora-creations/mikros-professional](https://github.com/agora-creations/mikros-professional) |
 
 This repo itself bundles only `mikros_server/workflows/example.yaml` as a reference workflow plus `tests/fixtures/workflows/` (one canonical 3-step framework fixture plus seven demo fixtures exercising M004/M005 features). Production workflows live exclusively in their category-specific repos.
 
@@ -154,7 +154,7 @@ The pattern is mechanical. Replicate one of the existing domain repos and:
 3. `pip install -e ".[test]" && pytest && python main.py` to verify.
 4. Push.
 
-A future authoring guide (Phase E in the vision spec) will document this end to end.
+A future authoring guide will document this end to end.
 
 ## simplicity-guard
 
@@ -171,20 +171,11 @@ Enforces explicit anti-defaults: no enterprise patterns, no premature abstractio
 
 Operational test for task granularity. `/plan-slice` refuses to emit a plan that violates it. Compression is for *output*, not *task scope* — when a task feels too big, split it; never compress the surrounding context to fit.
 
-## Optional plugins
-
-- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) — output token reduction (~75% savings).
-- [docmancer/docmancer](https://github.com/docmancer/docmancer) — local doc retrieval to ground the AI in version-specific APIs.
-
-Both are fully optional; their absence is a clean no-op.
-
 ## License
 
 MIT. See `LICENSE`.
 
 ## Acknowledgements
 
-- [gsd-build/gsd-2](https://github.com/gsd-build/gsd-2) — Milestone/Slice/Task hierarchy, iron rule, pre-loaded dispatch, must-haves format, anti-pattern list (borrowed verbatim with attribution). MIT-licensed.
+- [Rasa CALM](rasa.com/docs/learn/concepts/calm/) — Closest architectural analog. The central thesis is the same: "The LLM interprets what the user wants. The logic decides what happens next." YAML-defined flows, deterministic execution, separation of concerns. Enterprise-grade, proprietary runtime.
 - [Anthropic, "Code execution with MCP"](https://www.anthropic.com/engineering/code-execution-with-mcp) (November 2025) — source for progressive tool disclosure architecture, cited in the vision spec as a design constraint for the future autodidaktós client.
-- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) — optional output token reduction plugin.
-- [docmancer/docmancer](https://github.com/docmancer/docmancer) — optional local doc retrieval plugin.
