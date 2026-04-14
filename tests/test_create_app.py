@@ -4,12 +4,12 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from mikros_server import create_app
 
 
-BUILT_IN_NAMES = {"coding", "essay", "blog", "decision", "research"}
+BUILT_IN_NAMES = {"example"}
 
 
 def _list_workflow_names(app):

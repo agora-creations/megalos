@@ -8,7 +8,7 @@ from mikros_server import state
 from mikros_server.schema import validate_workflow
 from tests.conftest import call_tool
 
-WORKFLOW_DIR = os.path.join(os.path.dirname(__file__), "..", "mikros_server", "workflows")
+WORKFLOW_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "workflows")
 
 
 def _wf_path(name):

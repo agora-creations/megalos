@@ -6,27 +6,12 @@ from tests.conftest import call_tool
 class TestListWorkflows:
     def test_list_all(self):
         r = call_tool("list_workflows", {})
-        assert r["total"] == 12
+        # Post-M007 production workflows live in domain repos. Mikros bundles
+        # only example.yaml. Other test modules may inject demo fixtures into
+        # the shared WORKFLOWS dict — assert example is present, not specifics.
+        assert r["total"] >= 1
         names = {w["name"] for w in r["workflows"]}
-        assert {"coding", "essay", "blog", "research", "decision"}.issubset(names)
-        assert {"demo_validation", "demo_context", "demo_directives_socratic", "demo_directives_direct"}.issubset(names)
-        assert {"demo_branching", "demo_artifacts", "demo_guardrails"}.issubset(names)
-
-    def test_filter_by_category(self):
-        r = call_tool("list_workflows", {"category": "writing_communication"})
-        names = {w["name"] for w in r["workflows"]}
-        assert names == {"essay", "blog"}
-        assert r["total"] == 2
-
-    def test_filter_analysis(self):
-        r = call_tool("list_workflows", {"category": "analysis_decision"})
-        names = {w["name"] for w in r["workflows"]}
-        assert names == {"research", "decision"}
-
-    def test_filter_professional(self):
-        r = call_tool("list_workflows", {"category": "professional"})
-        names = {w["name"] for w in r["workflows"]}
-        assert names == {"coding"}
+        assert "example" in names
 
     def test_filter_unknown_category(self):
         r = call_tool("list_workflows", {"category": "nonexistent"})

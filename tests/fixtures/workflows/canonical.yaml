@@ -1,0 +1,33 @@
+# canonical.yaml — Framework test fixture for mikros.
+#
+# This is NOT a production workflow. It exists so framework-level tests
+# (revise_step, session_management, MCP tools, schema_validation) have a
+# canonical workflow target that does not depend on any production YAML.
+# Production workflows live in their own domain repos (M007).
+#
+# Step IDs are deliberately neutral (alpha, bravo, charlie) to prevent
+# confusion with any real workflow. Three steps is the minimum needed to
+# verify ordering (alpha first), revision (bravo middle), and completion
+# (charlie last).
+
+name: canonical
+description: Synthetic 3-step framework test fixture (not a production workflow).
+category: test
+output_format: structured_code
+
+steps:
+  - id: alpha
+    title: Alpha
+    directive_template: First step. Do NOT skip ahead. Stub directive for tests.
+    gates: [done]
+    anti_patterns: [skipping]
+  - id: bravo
+    title: Bravo
+    directive_template: Middle step. Do NOT skip ahead. Stub directive for tests.
+    gates: [done]
+    anti_patterns: [skipping]
+  - id: charlie
+    title: Charlie
+    directive_template: Final step. Do NOT skip ahead. Stub directive for tests.
+    gates: [done]
+    anti_patterns: [skipping]

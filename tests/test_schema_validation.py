@@ -197,11 +197,11 @@ class TestBackwardCompatibility:
         assert "submitted" in r
         assert r["submitted"]["id"] == "step_a"
 
-    def test_existing_coding_workflow_unchanged(self):
-        """The coding workflow has no output_schema — should work as before."""
-        r = call_tool("start_workflow", {"workflow_type": "coding", "context": "test"})
+    def test_existing_canonical_workflow_unchanged(self):
+        """The canonical fixture has no output_schema — should work as before."""
+        r = call_tool("start_workflow", {"workflow_type": "canonical", "context": "test"})
         sid = r["session_id"]
-        r = call_tool("submit_step", {"session_id": sid, "step_id": "discuss", "content": "plain text"})
+        r = call_tool("submit_step", {"session_id": sid, "step_id": "alpha", "content": "plain text"})
         assert "submitted" in r
 
 

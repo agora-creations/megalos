@@ -12,16 +12,18 @@ WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "mikros_server", "
 
 
 def test_valid_workflow_no_errors():
-    """All five built-in workflows pass validation."""
-    for name in ("coding", "essay", "blog", "decision", "research"):
-        path = os.path.join(WORKFLOWS_DIR, f"{name}.yaml")
+    """Every YAML in mikros_server/workflows/ validates cleanly."""
+    import glob
+    paths = glob.glob(os.path.join(WORKFLOWS_DIR, "*.yaml"))
+    assert paths, "no workflow YAMLs found in mikros_server/workflows/"
+    for path in paths:
         errors, _ = validate_workflow(path)
-        assert errors == [], f"{name}.yaml had errors: {errors}"
+        assert errors == [], f"{os.path.basename(path)} had errors: {errors}"
 
 
 def test_valid_workflow_cli_exit_0():
     """CLI exits 0 for a valid workflow."""
-    path = os.path.join(WORKFLOWS_DIR, "coding.yaml")
+    path = os.path.join(WORKFLOWS_DIR, "example.yaml")
     result = subprocess.run(
         [sys.executable, "-m", "mikros_server.validate", path],
         capture_output=True, text=True,
