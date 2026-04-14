@@ -6,6 +6,7 @@
 
 ## Contents
 
+- [Installation](#installation)
 - [The thesis](#the-thesis)
 - [Architecture — four layers](#architecture--four-layers)
 - [The YAML schema](#the-yaml-schema)
@@ -14,7 +15,6 @@
   - [MCP tools (9)](#mcp-tools-9)
   - [Mechanical enforcement](#mechanical-enforcement)
   - [Session state](#session-state)
-  - [Installation](#installation)
 - [MCP servers](#mcp-servers)
 - [Authoring a new domain repo](#authoring-a-new-domain-repo)
 - [simplicity-guard](#simplicity-guard)
@@ -22,6 +22,16 @@
 - [Optional plugins](#optional-plugins)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
+
+## Installation
+
+Add the mikrós MCP server as a connector in any MCP-compatible client (Claude desktop or web, ChatGPT, Cursor, custom clients) — paste the URL, no install or local setup needed:
+
+```
+https://Mikros.fastmcp.app/mcp
+```
+
+Domain-specific endpoints (writing, analysis, professional) become available as their respective servers deploy.
 
 ## The thesis
 
@@ -36,7 +46,7 @@ Determinism comes from gates in the runtime, not from prompt engineering. The MC
 | **mikrós** (this repo) | YAML schema, MCP server runtime (`mikros-server` package), validation tooling, simplicity-guard | live |
 | **mikrós-{domain}** | Per-domain MCP servers built on the runtime | live: writing, analysis, professional |
 | **autodidaktós** | Bring-your-own-key chat client (web first, mobile later) | future |
-| **megálos** | Terminal-first developer harness for structured coding workflows | future (currently embedded in this repo, slated for extraction in Phase F) |
+| **megálos** | Terminal-first developer harness for structured coding workflows | future (currently embedded in this repo) |
 
 ## The YAML schema
 
@@ -94,14 +104,6 @@ The server never calls any LLM. Zero LLM imports, zero provider references. Tool
 ### Session state
 
 In-memory dict store. Sessions have `session_id`, `workflow_type`, `current_step`, `step_data`, timestamps. Cap of 5 active sessions, TTL-based expiration. No SQLite, no external state store — keeps the runtime trivially deployable.
-
-### Installation
-
-The mikrós MCP server runs at:
-
-**`https://Mikros.fastmcp.app/mcp`**
-
-Add it as a connector in any MCP-compatible client (Claude desktop or web, ChatGPT, Cursor, custom clients) — paste the URL, no install or local setup needed. Domain-specific endpoints (writing, analysis, professional) become available as their respective servers deploy.
 
 ## MCP servers
 
