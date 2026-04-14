@@ -1,12 +1,12 @@
 ---
 name: discuss
-description: Capture user decisions for a new milestone before any planning happens. Writes to DECISIONS.md and M###-CONTEXT.md. The first mikrós command in any new project.
+description: Capture user decisions for a new milestone before any planning happens. Writes to DECISIONS.md and M###-CONTEXT.md. The first megálos command in any new project.
 argument-hint: "<topic or milestone ID>"
 ---
 
 # /discuss — the discussion gate
 
-You are running the **discussion gate** for mikrós. No planning, no code, no slice decomposition until this gate passes.
+You are running the **discussion gate** for megálos. No planning, no code, no slice decomposition until this gate passes.
 
 ## Step 0 — Caveman mode for this phase
 
@@ -19,11 +19,11 @@ Run `bash .claude/lib/caveman-phase.sh active discuss` and capture the result as
 
 Read these files into your working context in this order:
 
-1. `.mikros/STATE.md` — determine whether a milestone is already active. If so, mention it to the user; ask whether this discussion is for the same milestone or a new one.
-2. `.mikros/DECISIONS.md` — the append-only register of prior decisions. Every decision captured today will be appended here.
-3. If a milestone is already active: `.mikros/plans/M###/CONTEXT.md` — prior captured decisions for this milestone.
+1. `.megalos/STATE.md` — determine whether a milestone is already active. If so, mention it to the user; ask whether this discussion is for the same milestone or a new one.
+2. `.megalos/DECISIONS.md` — the append-only register of prior decisions. Every decision captured today will be appended here.
+3. If a milestone is already active: `.megalos/plans/M###/CONTEXT.md` — prior captured decisions for this milestone.
 
-If any of these files do not exist, it means the project has not been initialized yet. In that case, create `.mikros/STATE.md` and `.mikros/DECISIONS.md` from the templates in `.mikros/templates/` first.
+If any of these files do not exist, it means the project has not been initialized yet. In that case, create `.megalos/STATE.md` and `.megalos/DECISIONS.md` from the templates in `.megalos/templates/` first.
 
 ## Step 2 — Ask questions, one at a time
 
@@ -43,9 +43,9 @@ Stop asking when the user says they are done, or when you have enough informatio
 
 After the interview, write (or append to) the following files using atomic write-then-rename:
 
-1. `.mikros/plans/M###/CONTEXT.md` — full captured answers, in a structured format (see template `.mikros/templates/`).
-2. `.mikros/DECISIONS.md` — append one entry per captured decision, each with today's date and a one-paragraph rationale.
-3. `.mikros/STATE.md` — update the `active_milestone` field to the new milestone ID.
+1. `.megalos/plans/M###/CONTEXT.md` — full captured answers, in a structured format (see template `.megalos/templates/`).
+2. `.megalos/DECISIONS.md` — append one entry per captured decision, each with today's date and a one-paragraph rationale.
+3. `.megalos/STATE.md` — update the `active_milestone` field to the new milestone ID.
 
 Write every file via:
 

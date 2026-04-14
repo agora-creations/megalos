@@ -17,7 +17,7 @@ Run `bash .claude/lib/caveman-phase.sh active compress` and capture the result a
 
 ## Step 1 — Diff the slice
 
-Read `.mikros/STATE.md` to get the merge commit for the slice. Run:
+Read `.megalos/STATE.md` to get the merge commit for the slice. Run:
 
 ```
 git diff <pre-slice-commit>..HEAD --stat
@@ -77,7 +77,7 @@ git commit -m "refactor(<slice-id>): deletion-first compression pass"
 
 ## Step 6 — Update gotchas.md if you learned something
 
-If the compression pass revealed a failure mode that should be prevented next time (e.g., the planner created an interface with a single implementation and you had to inline it), append an entry to `.claude/skills/simplicity-guard/references/gotchas.md`. This is how mikrós improves — every compression pass is a feedback opportunity.
+If the compression pass revealed a failure mode that should be prevented next time (e.g., the planner created an interface with a single implementation and you had to inline it), append an entry to `.claude/skills/simplicity-guard/references/gotchas.md`. This is how megálos improves — every compression pass is a feedback opportunity.
 
 ## Step 7 — Hand off
 

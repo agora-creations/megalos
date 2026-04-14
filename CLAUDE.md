@@ -23,7 +23,7 @@ You are a veteran 20+ year senior engineer. You strictly follow **KISS**, **DRY*
 
 ## Workflow
 
-This project uses **mikrós**. The workflow is:
+This project uses **megálos**. The workflow is:
 
 1. `/discuss <topic>` — capture intent before code. Writes `DECISIONS.md` and `M###-CONTEXT.md`.
 2. `/plan-slice <S##>` — decompose a slice into tasks with must-haves. Enforces the iron rule.
@@ -41,11 +41,11 @@ If you need information from a prior task, it is either (a) in a summary file yo
 
 ## State on disk, not in context
 
-All workflow state lives under `.mikros/`:
+All workflow state lives under `.megalos/`:
 
-- `.mikros/STATE.md` — current milestone/slice/task pointer, always read first.
-- `.mikros/DECISIONS.md` — append-only decision register.
-- `.mikros/plans/M###/…` — per-milestone plan files.
+- `.megalos/STATE.md` — current milestone/slice/task pointer, always read first.
+- `.megalos/DECISIONS.md` — append-only decision register.
+- `.megalos/plans/M###/…` — per-milestone plan files.
 
 Every command atomically rewrites state via `tmp file + mv`, never in place.
 

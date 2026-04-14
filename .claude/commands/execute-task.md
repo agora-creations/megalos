@@ -6,7 +6,7 @@ argument-hint: "<task-id, e.g. T01>"
 
 # /execute-task — pre-loaded dispatch to phase-builder
 
-You are the dispatcher for one mikrós task. You do **not** write code yourself — you build a pre-loaded dispatch prompt and hand it to the `phase-builder` subagent.
+You are the dispatcher for one megálos task. You do **not** write code yourself — you build a pre-loaded dispatch prompt and hand it to the `phase-builder` subagent.
 
 ## Step 0 — Caveman mode for this phase
 
@@ -19,7 +19,7 @@ Include a single line `CAVEMAN_MODE: on` or `CAVEMAN_MODE: off` near the top of 
 
 ## Step 1 — Verify gates
 
-Read `.mikros/STATE.md`. Verify:
+Read `.megalos/STATE.md`. Verify:
 
 - An active milestone, slice, and task are set.
 - The argument you received matches `active_task` (if not, stop and ask the user to update `STATE.md` or re-run).
@@ -28,9 +28,9 @@ Read `.mikros/STATE.md`. Verify:
 
 Build your dispatch prompt by **inlining** all of the following content directly into the prompt text. The subagent must not need to read any file that is already inlined here.
 
-1. **The task plan.** Read `.mikros/plans/M###/S##/T##-PLAN.md` in full. Inline it verbatim.
+1. **The task plan.** Read `.megalos/plans/M###/S##/T##-PLAN.md` in full. Inline it verbatim.
 2. **Prior task summaries from the same slice.** Read `T##-SUMMARY.md` for every completed task `T0X` where `X < current`. Inline each verbatim.
-3. **Architectural decisions.** Read `.mikros/DECISIONS.md` in full. Inline it verbatim.
+3. **Architectural decisions.** Read `.megalos/DECISIONS.md` in full. Inline it verbatim.
 4. **Source files listed in the task's Artifacts section.** For each file path the task plan names, read the current content and inline it. Annotate with `<!-- CURRENT CONTENT OF path/to/file.py -->` markers.
 5. **Relevant reference files from `simplicity-guard`.** Inline `anti-patterns.md` and any non-empty `gotchas.md`.
 
@@ -54,17 +54,17 @@ The `phase-builder` subagent is defined with `isolation: worktree`, `maxTurns: 3
 
 The subagent will return a summary in the required format (see `.claude/agents/phase-builder.md`). Save it to disk:
 
-- Write `.mikros/plans/M###/S##/T##-SUMMARY.md` via atomic write-then-rename (tmp file, `mv`).
-- Parse the `### Worktree` section of the summary and extract `branch` and `path`. Write both to `.mikros/STATE.md`:
+- Write `.megalos/plans/M###/S##/T##-SUMMARY.md` via atomic write-then-rename (tmp file, `mv`).
+- Parse the `### Worktree` section of the summary and extract `branch` and `path`. Write both to `.megalos/STATE.md`:
   - `active_worktree:` ← branch name
   - `active_worktree_path:` ← absolute worktree path
   (Atomic write-then-rename as usual.)
-- If the summary's `### Decisions` section is non-empty, append each decision (with today's date header) to `.mikros/DECISIONS.md` atomically.
+- If the summary's `### Decisions` section is non-empty, append each decision (with today's date header) to `.megalos/DECISIONS.md` atomically.
 - If the summary includes a `### Gotchas` section (optional; appears only when the subagent hit a failure mode), append those to `.claude/skills/simplicity-guard/references/gotchas.md`.
 
 ## Step 5 — Update STATE.md
 
-Atomically update `.mikros/STATE.md`:
+Atomically update `.megalos/STATE.md`:
 - Mark `T##` as complete.
 - Advance `active_task` to the next task in the slice (read from `S##-PLAN.md`).
 - Update `loc_budget` to the next task's LOC budget (read from its entry in `S##-PLAN.md`).

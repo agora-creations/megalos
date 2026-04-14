@@ -6,7 +6,7 @@ argument-hint: "<slice-id, e.g. S01>"
 
 # /plan-slice — decompose a slice into tasks
 
-You are planning a slice for mikrós. A slice is a demoable vertical capability that contains a set number of tasks.
+You are planning a slice for megálos. A slice is a demoable vertical capability that contains a set number of tasks.
 
 ## Step 0 — Caveman mode for this phase
 
@@ -17,7 +17,7 @@ Run `bash .claude/lib/caveman-phase.sh active plan-slice` and capture the result
 
 ## Step 1 — Verify gates
 
-Read `.mikros/STATE.md` and verify:
+Read `.megalos/STATE.md` and verify:
 
 - An active milestone exists (`active_milestone` is set).
 - That milestone has a `CONTEXT.md` file — i.e., `/discuss` has run.
@@ -28,10 +28,10 @@ If either gate fails, stop and tell the user to run `/discuss` first.
 
 Read these files and hold them in your working context for the rest of the command. **Do not defer reading them.**
 
-- `.mikros/STATE.md`
-- `.mikros/DECISIONS.md`
-- `.mikros/plans/M###/ROADMAP.md`
-- `.mikros/plans/M###/CONTEXT.md`
+- `.megalos/STATE.md`
+- `.megalos/DECISIONS.md`
+- `.megalos/plans/M###/ROADMAP.md`
+- `.megalos/plans/M###/CONTEXT.md`
 - Any `T##-SUMMARY.md` files from prior completed tasks in this milestone (they contain lessons and decisions that constrain this slice).
 
 ## Step 3 — Research the codebase via the Explore subagent
@@ -46,7 +46,7 @@ Do not grep or read the whole codebase yourself. Use Explore — it's cheaper an
 
 ## Step 4 — Decompose into tasks
 
-Write `.mikros/plans/M###/S##-PLAN.md` containing:
+Write `.megalos/plans/M###/S##-PLAN.md` containing:
 
 1. **Slice goal** — one sentence.
 2. **Demoable outcome** — what the user should be able to see/run after this slice completes.
@@ -76,12 +76,12 @@ If any task fails the iron rule, split it into two tasks and rename. Do NOT emit
 
 Write the new `S##-PLAN.md` via the atomic write-then-rename pattern (see `/discuss` Step 3).
 
-Then update `.mikros/STATE.md`:
+Then update `.megalos/STATE.md`:
 - `active_slice: S##`
 - `active_task: T01`
 - `loc_budget:` copy from the first task
 
-And atomically update `.mikros/plans/M###/ROADMAP.md` to check off the slice as "planned".
+And atomically update `.megalos/plans/M###/ROADMAP.md` to check off the slice as "planned".
 
 ## Step 7 — Hand off
 

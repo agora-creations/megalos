@@ -101,7 +101,7 @@ Wait for the user's one-character answer. Do not auto-advance.
 
 If the user answered `y`:
 
-1. Get the worktree branch name from `.mikros/STATE.md` (`active_worktree`).
+1. Get the worktree branch name from `.megalos/STATE.md` (`active_worktree`).
 2. Run:
    ```
    git checkout main
@@ -109,7 +109,7 @@ If the user answered `y`:
    git commit -m "feat(<id>): <slice or task title>"
    git worktree remove <active_worktree_path> --force
    ```
-3. Atomically update `.mikros/STATE.md` to clear the active worktree and advance the roadmap checkbox for `<id>`.
+3. Atomically update `.megalos/STATE.md` to clear the active worktree and advance the roadmap checkbox for `<id>`.
 
 ## Step 6 — Hand off
 
