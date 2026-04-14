@@ -12,15 +12,13 @@ from tests.conftest import call_tool
 
 WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "workflows")
 
-_DEMOS = ("demo_branching", "demo_artifacts", "demo_guardrails")
-
 
 def setup_function():
     state.clear_sessions()
     # Demos live in tests/fixtures/ post-M007 and are no longer auto-loaded
     # by create_app. Inject them into the running app's WORKFLOWS dict so
     # MCP tool calls (start_workflow, submit_step) can find them.
-    for name in _DEMOS:
+    for name in ("demo_branching", "demo_artifacts", "demo_guardrails"):
         WORKFLOWS[name] = load_workflow(os.path.join(WORKFLOWS_DIR, f"{name}.yaml"))
 
 
@@ -31,7 +29,7 @@ def teardown_function():
 # --- Load / validation ---
 
 def test_all_three_demos_load_and_validate():
-    for name in _DEMOS:
+    for name in ("demo_branching", "demo_artifacts", "demo_guardrails"):
         errors, doc = validate_workflow(os.path.join(WORKFLOWS_DIR, f"{name}.yaml"))
         assert errors == [], f"{name}: {errors}"
         assert doc["name"] == name

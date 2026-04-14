@@ -1,14 +1,8 @@
-# canonical.yaml — Framework test fixture for mikros.
+# canonical.yaml — Framework test fixture (NOT a production workflow).
 #
-# This is NOT a production workflow. It exists so framework-level tests
-# (revise_step, session_management, MCP tools, schema_validation) have a
-# canonical workflow target that does not depend on any production YAML.
-# Production workflows live in their own domain repos (M007).
-#
-# Step IDs are deliberately neutral (alpha, bravo, charlie) to prevent
-# confusion with any real workflow. Three steps is the minimum needed to
-# verify ordering (alpha first), revision (bravo middle), and completion
-# (charlie last).
+# Three neutral steps (alpha, bravo, charlie) — minimum to verify ordering,
+# mid-revision, and completion. Neutral IDs prevent confusion with real
+# workflows. Loaded into WORKFLOWS via tests/conftest.py at import time.
 
 name: canonical
 description: Synthetic 3-step framework test fixture (not a production workflow).

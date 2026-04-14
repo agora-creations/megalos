@@ -1,23 +1,8 @@
 # example.yaml — Reference workflow for mikros.
 #
-# This file is NOT a production workflow. It is a minimal, heavily-commented
-# example intended to teach the YAML schema to first-time contributors.
-# Production workflows live in their own domain repositories (see M007).
-#
-# To validate this file after editing:
-#   python -m mikros_server.validate mikros_server/workflows/example.yaml
-#
-# Schema overview:
-#   name            — unique identifier used by MCP tools (must match filename stem).
-#   description     — one-line human-readable summary shown in list_workflows.
-#   category        — grouping label used by list_workflows --category filter.
-#   output_format   — "text" or "json". Controls how the final artifact is rendered.
-#   steps           — ordered list of steps the user walks through.
-#     id                  — unique within the workflow, used by submit_step.
-#     title               — short display label.
-#     directive_template  — prompt the model receives when this step is active.
-#     gates               — conditions that must be satisfied before advancing.
-#     anti_patterns       — behaviors the model must avoid in this step.
+# Minimal, NOT a production workflow. Production workflows live in their
+# own domain repositories (see M007). For schema reference see SCHEMA.md.
+# Validate: python -m mikros_server.validate mikros_server/workflows/example.yaml
 
 name: example
 description: Minimal reference workflow demonstrating the mikros YAML schema.

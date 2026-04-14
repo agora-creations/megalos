@@ -3,8 +3,7 @@
 import asyncio
 import os
 
-from mikros_server.main import mcp
-from mikros_server.main import WORKFLOWS
+from mikros_server.main import mcp, WORKFLOWS
 from mikros_server.schema import load_workflow
 
 # Register the canonical 6-step framework test fixture so framework-level
