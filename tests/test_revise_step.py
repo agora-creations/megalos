@@ -1,6 +1,6 @@
 """Tests for revise_step tool — invalidate-forward semantics."""
 
-from server import state
+from mikros_server import state
 from tests.conftest import call_tool
 
 CODING_STEPS = ["discuss", "plan", "execute", "review", "iterate", "deliver"]

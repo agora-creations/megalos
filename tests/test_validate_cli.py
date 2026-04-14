@@ -1,15 +1,14 @@
-"""Tests for server.validate CLI and validate_workflow function."""
+"""Tests for mikros_server.validate CLI and validate_workflow function."""
 
 import os
 import subprocess
 import sys
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from server.schema import validate_workflow
+from mikros_server.schema import validate_workflow
 
-WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "server", "workflows")
+WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "mikros_server", "workflows")
 
 
 def test_valid_workflow_no_errors():
@@ -24,7 +23,7 @@ def test_valid_workflow_cli_exit_0():
     """CLI exits 0 for a valid workflow."""
     path = os.path.join(WORKFLOWS_DIR, "coding.yaml")
     result = subprocess.run(
-        [sys.executable, "-m", "server.validate", path],
+        [sys.executable, "-m", "mikros_server.validate", path],
         capture_output=True, text=True,
         cwd=os.path.join(os.path.dirname(__file__), ".."),
     )
@@ -37,7 +36,7 @@ def test_missing_required_fields_exit_1():
         f.write("steps:\n  - id: s1\n    title: T\n    directive_template: D\n    gates: []\n    anti_patterns: []\n")
         f.flush()
         result = subprocess.run(
-            [sys.executable, "-m", "server.validate", f.name],
+            [sys.executable, "-m", "mikros_server.validate", f.name],
             capture_output=True, text=True,
             cwd=os.path.join(os.path.dirname(__file__), ".."),
         )
@@ -54,7 +53,7 @@ def test_bad_step_structure_exit_1():
         f.write("name: test\ndescription: d\ncategory: c\noutput_format: text\nsteps:\n  - id: s1\n")
         f.flush()
         result = subprocess.run(
-            [sys.executable, "-m", "server.validate", f.name],
+            [sys.executable, "-m", "mikros_server.validate", f.name],
             capture_output=True, text=True,
             cwd=os.path.join(os.path.dirname(__file__), ".."),
         )

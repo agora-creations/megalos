@@ -1,14 +1,11 @@
 """Tests for step-level LLM behavioral directives."""
 
-import os
-import sys
 import tempfile
 
 import yaml
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from server.schema import validate_workflow
+from mikros_server.schema import validate_workflow
 from tests.conftest import call_tool
 
 
@@ -90,19 +87,19 @@ class TestDirectivesRuntime:
     _registered_wf_names: list = []
 
     def setup_method(self):
-        from server import state
+        from mikros_server import state
         state.clear_sessions()
 
     def teardown_method(self):
-        from server import state
-        from server.main import WORKFLOWS as wfs
+        from mikros_server import state
+        from mikros_server.main import WORKFLOWS as wfs
         state.clear_sessions()
         for name in self._registered_wf_names:
             wfs.pop(name, None)
         self._registered_wf_names.clear()
 
     def _register_wf(self, name, wf):
-        from server.main import WORKFLOWS as wfs
+        from mikros_server.main import WORKFLOWS as wfs
         wfs[name] = wf
         self._registered_wf_names.append(name)
 

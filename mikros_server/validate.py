@@ -2,12 +2,12 @@
 
 import sys
 
-from server.schema import validate_workflow
+from .schema import validate_workflow
 
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python3 -m server.validate <path/to/workflow.yaml>", file=sys.stderr)
+        print("Usage: python3 -m mikros_server.validate <path/to/workflow.yaml>", file=sys.stderr)
         sys.exit(1)
     errors, _ = validate_workflow(sys.argv[1])
     if errors:

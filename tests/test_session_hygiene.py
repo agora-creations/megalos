@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 from conftest import call_tool
-from server import state
+from mikros_server import state
 
 
 def _any_workflow_type():

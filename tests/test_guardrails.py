@@ -1,16 +1,14 @@
 """Tests for workflow guardrails with escalation."""
 
 import os
-import sys
 import tempfile
 
 import yaml
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from server import state
-from server.main import WORKFLOWS
-from server.schema import validate_workflow
+from mikros_server import state
+from mikros_server.main import WORKFLOWS
+from mikros_server.schema import validate_workflow
 from tests.conftest import call_tool
 
 

@@ -5,8 +5,8 @@ import re
 
 import jsonschema
 
-from server import state
-from server.state import COMPLETE as _COMPLETE
+from . import state
+from .state import COMPLETE as _COMPLETE
 
 _DEFAULT_MAX_RETRIES = 3
 

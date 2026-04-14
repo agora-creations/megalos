@@ -25,3 +25,8 @@ SCRATCH.md
 
 # mikrós runtime state (per-project, not shared)
 .mikros/
+
+# Build artifacts
+*.egg-info/
+build/
+dist/

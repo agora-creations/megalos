@@ -126,6 +126,12 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     errors = []
     if not isinstance(doc, dict):
         return [f"Workflow YAML must be a mapping, got {type(doc).__name__}"], None
+    # schema_version is optional; default to "0.1" when omitted. No value rejection — YAGNI.
+    if "schema_version" in doc:
+        if not isinstance(doc["schema_version"], str):
+            errors.append("schema_version must be a string")
+    else:
+        doc["schema_version"] = "0.1"
     for key in ("name", "description", "category", "output_format"):
         if key not in doc:
             errors.append(f"Workflow missing required key: '{key}'")
