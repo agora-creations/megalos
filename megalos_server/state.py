@@ -1,4 +1,4 @@
-"""In-memory session store for mikros MCP server."""
+"""In-memory session store for megalos MCP server."""
 
 import uuid
 from datetime import datetime, timezone

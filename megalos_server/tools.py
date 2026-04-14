@@ -1,4 +1,4 @@
-"""MCP tool functions for mikros workflow engine."""
+"""MCP tool functions for megalos workflow engine."""
 
 import json
 import re

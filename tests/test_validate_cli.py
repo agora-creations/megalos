@@ -1,4 +1,4 @@
-"""Tests for mikros_server.validate CLI and validate_workflow function."""
+"""Tests for megalos_server.validate CLI and validate_workflow function."""
 
 import os
 import subprocess
@@ -6,16 +6,16 @@ import sys
 import tempfile
 
 
-from mikros_server.schema import validate_workflow
+from megalos_server.schema import validate_workflow
 
-WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "mikros_server", "workflows")
+WORKFLOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "megalos_server", "workflows")
 
 
 def test_valid_workflow_no_errors():
-    """Every YAML in mikros_server/workflows/ validates cleanly."""
+    """Every YAML in megalos_server/workflows/ validates cleanly."""
     import glob
     paths = glob.glob(os.path.join(WORKFLOWS_DIR, "*.yaml"))
-    assert paths, "no workflow YAMLs found in mikros_server/workflows/"
+    assert paths, "no workflow YAMLs found in megalos_server/workflows/"
     for path in paths:
         errors, _ = validate_workflow(path)
         assert errors == [], f"{os.path.basename(path)} had errors: {errors}"
@@ -25,7 +25,7 @@ def test_valid_workflow_cli_exit_0():
     """CLI exits 0 for a valid workflow."""
     path = os.path.join(WORKFLOWS_DIR, "example.yaml")
     result = subprocess.run(
-        [sys.executable, "-m", "mikros_server.validate", path],
+        [sys.executable, "-m", "megalos_server.validate", path],
         capture_output=True, text=True,
         cwd=os.path.join(os.path.dirname(__file__), ".."),
     )
@@ -38,7 +38,7 @@ def test_missing_required_fields_exit_1():
         f.write("steps:\n  - id: s1\n    title: T\n    directive_template: D\n    gates: []\n    anti_patterns: []\n")
         f.flush()
         result = subprocess.run(
-            [sys.executable, "-m", "mikros_server.validate", f.name],
+            [sys.executable, "-m", "megalos_server.validate", f.name],
             capture_output=True, text=True,
             cwd=os.path.join(os.path.dirname(__file__), ".."),
         )
@@ -55,7 +55,7 @@ def test_bad_step_structure_exit_1():
         f.write("name: test\ndescription: d\ncategory: c\noutput_format: text\nsteps:\n  - id: s1\n")
         f.flush()
         result = subprocess.run(
-            [sys.executable, "-m", "mikros_server.validate", f.name],
+            [sys.executable, "-m", "megalos_server.validate", f.name],
             capture_output=True, text=True,
             cwd=os.path.join(os.path.dirname(__file__), ".."),
         )

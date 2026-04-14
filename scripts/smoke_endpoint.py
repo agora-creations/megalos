@@ -1,4 +1,4 @@
-"""Smoke-test a mikros MCP endpoint: verify expected workflows are present.
+"""Smoke-test a megalos MCP endpoint: verify expected workflows are present.
 
 Usage:
     python3 scripts/smoke_endpoint.py <url-or-local> --expected name1 [name2 ...]
@@ -46,7 +46,7 @@ async def _fetch_names_http(url: str):
 
 
 def _fetch_names_local(workflow_dir: Path | None):
-    from mikros_server import create_app
+    from megalos_server import create_app
 
     mcp = create_app(workflow_dir=workflow_dir)
     result = asyncio.run(mcp.call_tool("list_workflows", {}))

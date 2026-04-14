@@ -4,7 +4,7 @@ import json
 import tempfile
 import os
 
-from mikros_server import state
+from megalos_server import state
 from tests.conftest import call_tool
 
 
@@ -78,7 +78,7 @@ steps:
 
 def _load_workflow_from_string(yaml_str):
     """Write YAML to a temp file and load it via the standard loader."""
-    from mikros_server.schema import load_workflow
+    from megalos_server.schema import load_workflow
     fd, path = tempfile.mkstemp(suffix=".yaml")
     try:
         with os.fdopen(fd, "w") as f:
@@ -90,7 +90,7 @@ def _load_workflow_from_string(yaml_str):
 
 def _register_and_start(yaml_str, wf_name):
     """Register a workflow from YAML string, start a session, return session_id."""
-    from mikros_server.main import WORKFLOWS
+    from megalos_server.main import WORKFLOWS
 
     wf = _load_workflow_from_string(yaml_str)
     WORKFLOWS[wf_name] = wf
@@ -104,7 +104,7 @@ class TestSchemaValidation:
 
     def setup_method(self):
         state.clear_sessions()
-        from mikros_server.main import WORKFLOWS
+        from megalos_server.main import WORKFLOWS
         self._wf = _load_workflow_from_string(_SCHEMA_WORKFLOW_YAML)
         WORKFLOWS["test_schema"] = self._wf
 
@@ -187,7 +187,7 @@ class TestBackwardCompatibility:
 
     def setup_method(self):
         state.clear_sessions()
-        from mikros_server.main import WORKFLOWS
+        from megalos_server.main import WORKFLOWS
         WORKFLOWS["test_plain"] = _load_workflow_from_string(_PLAIN_WORKFLOW_YAML)
 
     def test_plain_string_accepted(self):
@@ -209,7 +209,7 @@ class TestSchemaLoadTimeValidation:
     """Invalid output_schema caught at workflow load time."""
 
     def test_invalid_schema_caught(self):
-        from mikros_server.schema import validate_workflow
+        from megalos_server.schema import validate_workflow
         bad_yaml = """\
 name: bad
 description: Bad schema
@@ -233,7 +233,7 @@ steps:
             os.unlink(path)
 
     def test_invalid_max_retries_caught(self):
-        from mikros_server.schema import validate_workflow
+        from megalos_server.schema import validate_workflow
         bad_yaml = """\
 name: bad
 description: Bad retries
@@ -272,7 +272,7 @@ steps:
 
 
 def test_workflow_without_schema_version_defaults_to_01():
-    from mikros_server.schema import load_workflow
+    from megalos_server.schema import load_workflow
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(_MINIMAL_YAML)
         path = f.name
@@ -284,7 +284,7 @@ def test_workflow_without_schema_version_defaults_to_01():
 
 
 def test_workflow_with_explicit_schema_version_01():
-    from mikros_server.schema import load_workflow
+    from megalos_server.schema import load_workflow
     yaml_str = 'schema_version: "0.1"\n' + _MINIMAL_YAML
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_str)
@@ -297,7 +297,7 @@ def test_workflow_with_explicit_schema_version_01():
 
 
 def test_workflow_with_unknown_schema_version_passes_through():
-    from mikros_server.schema import load_workflow
+    from megalos_server.schema import load_workflow
     yaml_str = 'schema_version: "9.9"\n' + _MINIMAL_YAML
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(yaml_str)

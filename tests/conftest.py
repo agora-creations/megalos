@@ -1,10 +1,10 @@
-"""Shared test fixtures for mikros MCP tests."""
+"""Shared test fixtures for megalos MCP tests."""
 
 import asyncio
 import os
 
-from mikros_server.main import mcp, WORKFLOWS
-from mikros_server.schema import load_workflow
+from megalos_server.main import mcp, WORKFLOWS
+from megalos_server.schema import load_workflow
 
 # Register the canonical 6-step framework test fixture so framework-level
 # tests have a stable target after the M007 production-workflow split.

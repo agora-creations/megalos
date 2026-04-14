@@ -1,14 +1,14 @@
-"""mikros MCP server entrypoint — default app + CLI with --workflow-dir override."""
+"""megalos MCP server entrypoint — default app + CLI with --workflow-dir override."""
 
 import argparse
 
-from mikros_server import create_app
+from megalos_server import create_app
 
 # Module-level app for FastMCP CLI / Horizon entrypoint resolution.
 mcp = create_app()
 
 # Tests import and mutate WORKFLOWS — share the same dict register_tools closed over.
-WORKFLOWS: dict[str, dict] = mcp._mikros_workflows  # type: ignore[attr-defined]
+WORKFLOWS: dict[str, dict] = mcp._megalos_workflows  # type: ignore[attr-defined]
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -6,9 +6,9 @@ import tempfile
 import yaml
 
 
-from mikros_server import state
-from mikros_server.main import WORKFLOWS
-from mikros_server.schema import validate_workflow
+from megalos_server import state
+from megalos_server.main import WORKFLOWS
+from megalos_server.schema import validate_workflow
 from tests.conftest import call_tool
 
 

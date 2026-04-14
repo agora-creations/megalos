@@ -5,7 +5,7 @@ import tempfile
 import yaml
 
 
-from mikros_server.schema import validate_workflow
+from megalos_server.schema import validate_workflow
 from tests.conftest import call_tool
 
 
@@ -87,19 +87,19 @@ class TestDirectivesRuntime:
     _registered_wf_names: list = []
 
     def setup_method(self):
-        from mikros_server import state
+        from megalos_server import state
         state.clear_sessions()
 
     def teardown_method(self):
-        from mikros_server import state
-        from mikros_server.main import WORKFLOWS as wfs
+        from megalos_server import state
+        from megalos_server.main import WORKFLOWS as wfs
         state.clear_sessions()
         for name in self._registered_wf_names:
             wfs.pop(name, None)
         self._registered_wf_names.clear()
 
     def _register_wf(self, name, wf):
-        from mikros_server.main import WORKFLOWS as wfs
+        from megalos_server.main import WORKFLOWS as wfs
         wfs[name] = wf
         self._registered_wf_names.append(name)
 

@@ -1,11 +1,11 @@
-"""mikros MCP server — factory for creating configured FastMCP app instances."""
+"""megalos MCP server — factory for creating configured FastMCP app instances."""
 
 from pathlib import Path
 
 from fastmcp import FastMCP
 
-from mikros_server.schema import load_workflow
-from mikros_server.tools import register_tools
+from megalos_server.schema import load_workflow
+from megalos_server.tools import register_tools
 
 
 def create_app(workflow_dir: str | Path | None = None) -> FastMCP:
@@ -21,10 +21,10 @@ def create_app(workflow_dir: str | Path | None = None) -> FastMCP:
         workflows[wf["name"]] = wf
     if not workflows:
         raise RuntimeError(f"No workflow YAML files found in {wf_path}")
-    mcp = FastMCP("mikros")
+    mcp = FastMCP("megalos")
     register_tools(mcp, workflows)
     # Attach workflows dict for introspection / test mutation. Underscore = private.
-    mcp._mikros_workflows = workflows  # type: ignore[attr-defined]
+    mcp._megalos_workflows = workflows  # type: ignore[attr-defined]
     return mcp
 
 

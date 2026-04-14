@@ -1,6 +1,6 @@
 """Tests for revise_step tool — invalidate-forward semantics."""
 
-from mikros_server import state
+from megalos_server import state
 from tests.conftest import call_tool
 
 CANONICAL_STEPS = ["alpha", "bravo", "charlie"]

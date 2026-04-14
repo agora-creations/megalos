@@ -4,9 +4,9 @@ import json
 import os
 
 
-from mikros_server import state
-from mikros_server.main import WORKFLOWS
-from mikros_server.schema import load_workflow, validate_workflow
+from megalos_server import state
+from megalos_server.main import WORKFLOWS
+from megalos_server.schema import load_workflow, validate_workflow
 from tests.conftest import call_tool
 
 

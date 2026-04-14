@@ -1,6 +1,6 @@
 """Tests for list_sessions and delete_session tools."""
 
-from mikros_server import state
+from megalos_server import state
 from tests.conftest import call_tool
 
 STEPS = ["alpha", "bravo", "charlie"]

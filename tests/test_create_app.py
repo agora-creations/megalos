@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest  # type: ignore[import-not-found]
 
-from mikros_server import create_app
+from megalos_server import create_app
 
 
 BUILT_IN_NAMES = {"example"}

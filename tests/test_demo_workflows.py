@@ -4,8 +4,8 @@ import json
 import os
 
 
-from mikros_server import state
-from mikros_server.schema import validate_workflow
+from megalos_server import state
+from megalos_server.schema import validate_workflow
 from tests.conftest import call_tool
 
 WORKFLOW_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "workflows")
@@ -40,8 +40,8 @@ class TestWorkflowsLoad:
 class TestDemoValidation:
     def setup_method(self):
         state.clear_sessions()
-        from mikros_server.main import WORKFLOWS
-        from mikros_server.schema import load_workflow
+        from megalos_server.main import WORKFLOWS
+        from megalos_server.schema import load_workflow
         WORKFLOWS["demo_validation"] = load_workflow(_wf_path("demo_validation.yaml"))
 
     def _start(self):
@@ -93,8 +93,8 @@ class TestDemoValidation:
 class TestDemoContext:
     def setup_method(self):
         state.clear_sessions()
-        from mikros_server.main import WORKFLOWS
-        from mikros_server.schema import load_workflow
+        from megalos_server.main import WORKFLOWS
+        from megalos_server.schema import load_workflow
         WORKFLOWS["demo_context"] = load_workflow(_wf_path("demo_context.yaml"))
 
     def test_step2_receives_step1_context(self):
@@ -119,8 +119,8 @@ class TestDemoContext:
 class TestDemoDirectives:
     def setup_method(self):
         state.clear_sessions()
-        from mikros_server.main import WORKFLOWS
-        from mikros_server.schema import load_workflow
+        from megalos_server.main import WORKFLOWS
+        from megalos_server.schema import load_workflow
         WORKFLOWS["demo_directives_socratic"] = load_workflow(_wf_path("demo_directives_socratic.yaml"))
         WORKFLOWS["demo_directives_direct"] = load_workflow(_wf_path("demo_directives_direct.yaml"))
 
