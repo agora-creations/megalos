@@ -27,13 +27,40 @@
 
 Add the mikrós MCP server as a connector in any MCP-compatible client — no install or local setup needed.
 
-- **Claude web:** `https://Mikros.fastmcp.app/mcp`
-- **Claude desktop:** `https://Mikros.fastmcp.app/manifest.dxt?v=642267e3-c18f-42ae-b301-f18b234668a2`
-- **Claude Code:** `claude mcp add --scope local --transport http Mikros https://Mikros.fastmcp.app/mcp`
-- **Codex:** `codex mcp add --url https://Mikros.fastmcp.app/mcp Mikros`
-- **Gemini CLI:** `gemini mcp add Mikros https://Mikros.fastmcp.app/mcp --transport http`
-- **Cursor:** `cursor://anysphere.cursor-deeplink/mcp/install?name=Mikros&config=eyJ1cmwiOiJodHRwczovL01pa3Jvcy5mYXN0bWNwLmFwcC9tY3AifQ%3D%3D`
-- **VS Code:** `code --add-mcp "{\"name\":\"Mikros\",\"type\":\"http\",\"url\":\"https://Mikros.fastmcp.app/mcp\"}"`
+**Claude web**
+```
+https://Mikros.fastmcp.app/mcp
+```
+
+**Claude desktop**
+```
+https://Mikros.fastmcp.app/manifest.dxt?v=642267e3-c18f-42ae-b301-f18b234668a2
+```
+
+**Claude Code**
+```
+claude mcp add --scope local --transport http Mikros https://Mikros.fastmcp.app/mcp
+```
+
+**Codex**
+```
+codex mcp add --url https://Mikros.fastmcp.app/mcp Mikros
+```
+
+**Gemini CLI**
+```
+gemini mcp add Mikros https://Mikros.fastmcp.app/mcp --transport http
+```
+
+**Cursor**
+```
+cursor://anysphere.cursor-deeplink/mcp/install?name=Mikros&config=eyJ1cmwiOiJodHRwczovL01pa3Jvcy5mYXN0bWNwLmFwcC9tY3AifQ%3D%3D
+```
+
+**VS Code**
+```
+code --add-mcp "{\"name\":\"Mikros\",\"type\":\"http\",\"url\":\"https://Mikros.fastmcp.app/mcp\"}"
+```
 
 ## The thesis
 
@@ -47,7 +74,7 @@ Determinism comes from gates in the runtime, not from prompt engineering. The MC
 |-------|------------|--------|
 | **mikrós** (this repo) | YAML schema, MCP server runtime (`mikros-server` package), validation tooling, simplicity-guard | live |
 | **mikrós-{domain}** | Per-domain MCP servers built on the runtime | live: writing, analysis, professional |
-| **real-agora** | Bring-your-own-key chat client (web first, mobile later) | future |
+| **autodidaktós** | Bring-your-own-key chat client (web first, mobile later) | future |
 
 ## The YAML schema
 
