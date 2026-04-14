@@ -37,7 +37,7 @@ assert_eq 0 $? "AfterTool hooks point to .claude/hooks/ (shared scripts)"
 assert_file_exists "$REPO/GEMINI.md" "GEMINI.md exists"
 assert_file_contains "$REPO/GEMINI.md" "Iron rule" "GEMINI.md has Iron rule section"
 assert_file_contains "$REPO/GEMINI.md" "Anti-defaults" "GEMINI.md has Anti-defaults section"
-assert_file_contains "$REPO/GEMINI.md" "mikros" "GEMINI.md references mikros workflow"
+assert_file_contains "$REPO/GEMINI.md" "megálos" "GEMINI.md references megálos workflow"
 
 # --- install.sh runtime detection ---
 # Create temp dir with fake gemini on PATH but no claude

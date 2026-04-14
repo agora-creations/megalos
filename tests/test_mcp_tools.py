@@ -1,4 +1,4 @@
-"""End-to-end tests for mikros MCP workflow tools."""
+"""End-to-end tests for megalos MCP workflow tools."""
 
 from tests.conftest import call_tool
 

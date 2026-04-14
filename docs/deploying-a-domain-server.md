@@ -13,7 +13,7 @@ runtime, smoke test, Remix composition).
   `mikros-writing`, `mikros-analysis`, `mikros-professional`).
 - The repo follows the standard mikrós domain layout at its root:
   - `main.py` exporting `mcp` (the FastMCP server instance).
-  - `pyproject.toml` pinning `mikros-server @ git+https://github.com/agora-creations/mikros.git@v0.1.0`.
+  - `pyproject.toml` pinning `megalos-server @ git+https://github.com/agora-creations/megalos.git@v0.2.0`.
   - `Dockerfile`.
   - `workflows/` with the domain's YAML workflow files.
   - `deploy.sh`.
@@ -55,7 +55,7 @@ above, and call `list_workflows`. Every workflow YAML present in the repo's
 `workflows/` directory must appear. ChatMCP is for verification — not daily
 use.
 
-**Automated (CLI):** run the smoke script from the core `mikros` repo. It
+**Automated (CLI):** run the smoke script from the core `megalos` repo. It
 exits 0 only if every `--expected` workflow is present:
 
 ```sh
@@ -83,14 +83,14 @@ stderr — feed that into Troubleshooting below.
    server. If `list_workflows` now includes the new inventory, composition
    is live.
 
-The reference endpoint `https://Mikros.fastmcp.app/mcp` (serves the bundled
+The reference endpoint `https://Megalos.fastmcp.app/mcp` (serves the bundled
 `example.yaml`) is read-only during M008 — if your Remix Agent references
 it, verify but do not modify its entrypoint config.
 
 ## Troubleshooting
 
 - **Build fails during `fastmcp inspect` with a dependency resolution error.**
-  The pinned runtime `mikros-server @ git+…@v0.1.0` is public, so auth is
+  The pinned runtime `megalos-server @ git+…@v0.2.0` is public, so auth is
   not the cause. Tail the full build log; typical root cause is a
   transitive version conflict introduced by a newly-added dep in the
   domain repo's `pyproject.toml`. Fix the conflict locally

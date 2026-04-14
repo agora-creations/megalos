@@ -18,7 +18,7 @@ TESTS=(
   tests/test_claude_md.sh
   tests/test_settings.sh
   tests/test_install.sh
-  tests/test_mikros.sh
+  tests/test_megalos.sh
   tests/test_gemini_extension.sh
   tests/test_integration.sh
 )

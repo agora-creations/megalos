@@ -1,4 +1,4 @@
-# mikros MCP Server
+# megalos MCP Server
 
 Workflow-driven MCP server for structured workflows. Built with FastMCP, deployed to Prefect Horizon.
 
@@ -7,7 +7,7 @@ Workflow-driven MCP server for structured workflows. Built with FastMCP, deploye
 1. Go to [claude.ai](https://claude.ai) > Settings > Connectors > Add custom connector
 2. Paste the server URL:
    ```
-   https://Mikros.fastmcp.app/mcp
+   https://Megalos.fastmcp.app/mcp
    ```
 3. Done. Try one of these prompts:
 
@@ -86,6 +86,6 @@ For production deployments, configure rate limiting at the hosting/reverse-proxy
 ## Docker
 
 ```bash
-docker build -t mikros-mcp .
-docker run -p 8000:8000 mikros-mcp
+docker build -t megalos-mcp .
+docker run -p 8000:8000 megalos-mcp
 ```
