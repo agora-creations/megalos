@@ -1,7 +1,7 @@
 # example.yaml — Reference workflow for mikros.
 #
 # Minimal, NOT a production workflow. Production workflows live in their
-# own domain repositories (see M007). For schema reference see SCHEMA.md.
+# own domain repositories (see README.md). For schema reference see SCHEMA.md.
 # Validate: python -m mikros_server.validate mikros_server/workflows/example.yaml
 
 name: example
