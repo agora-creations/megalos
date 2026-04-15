@@ -7,6 +7,8 @@ from pathlib import Path
 
 REQUIRED_STEP_KEYS = {"id", "title", "directive_template", "gates", "anti_patterns"}
 
+REPAIR_KEYS = {"on_go_back", "on_cancel", "on_digression", "on_clarification"}
+
 
 def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) -> None:
     """Validate optional output_schema, max_retries, validation_hint on a step."""
@@ -19,6 +21,15 @@ def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) ->
                 jsonschema.Draft202012Validator.check_schema(schema)
             except jsonschema.SchemaError as e:
                 errors.append(f"Step '{label}' output_schema is not valid JSON Schema: {e.message}")
+    if "collect" in step:
+        c = step["collect"]
+        if not isinstance(c, bool):
+            errors.append(f"Step '{label}' collect must be a boolean")
+        elif c and "output_schema" not in step:
+            errors.append(f"Step '{label}' has collect: true but is missing required 'output_schema'")
+    if "step_description" in step:
+        if not isinstance(step["step_description"], str):
+            errors.append(f"Step '{label}' step_description must be a string")
     if "max_retries" in step:
         mr = step["max_retries"]
         if not isinstance(mr, int) or mr < 1:
@@ -126,12 +137,22 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     errors = []
     if not isinstance(doc, dict):
         return [f"Workflow YAML must be a mapping, got {type(doc).__name__}"], None
-    # schema_version is optional; default to "0.1" when omitted. No value rejection — YAGNI.
+    # schema_version is optional; default to "0.2" when omitted. No value rejection — YAGNI.
     if "schema_version" in doc:
         if not isinstance(doc["schema_version"], str):
             errors.append("schema_version must be a string")
     else:
-        doc["schema_version"] = "0.1"
+        doc["schema_version"] = "0.2"
+    if "conversation_repair" in doc:
+        repair = doc["conversation_repair"]
+        if not isinstance(repair, dict):
+            errors.append("conversation_repair must be a mapping")
+        else:
+            for k, v in repair.items():
+                if k not in REPAIR_KEYS:
+                    errors.append(f"conversation_repair has unknown key '{k}'; valid keys: {sorted(REPAIR_KEYS)}")
+                elif not isinstance(v, str):
+                    errors.append(f"conversation_repair['{k}'] must be a string")
     for key in ("name", "description", "category", "output_format"):
         if key not in doc:
             errors.append(f"Workflow missing required key: '{key}'")

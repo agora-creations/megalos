@@ -13,6 +13,8 @@ class TestFullWorkflow:
         assert "session_id" in r
         assert r["current_step"]["id"] == "alpha"
         assert "Do NOT" in r["directive"]
+        assert "conversation_repair" in r
+        assert r["conversation_repair"]["on_cancel"] == "Confirm cancellation, then use delete_session"
         sid = r["session_id"]
 
         for i, step_id in enumerate(STEPS):

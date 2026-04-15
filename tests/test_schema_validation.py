@@ -169,6 +169,15 @@ class TestSchemaValidation:
         assert r["status"] == "validation_error"
         assert any("not valid JSON" in e for e in r["errors"])
 
+    def test_field_level_error_message_includes_path(self):
+        """Field-level errors prefix messages with the JSON path (e.g., 'title: ...')."""
+        sid = self._start()
+        # Wrong type for title (int instead of string)
+        content = json.dumps({"title": 42, "tags": ["x"], "confirmed": True})
+        r = call_tool("submit_step", {"session_id": sid, "step_id": "collect", "content": content})
+        assert r["status"] == "validation_error"
+        assert any(e.startswith("title:") for e in r["errors"]), r["errors"]
+
     def test_retry_then_succeed(self):
         """LLM self-correction: fail once, then succeed on retry."""
         sid = self._start()
@@ -232,6 +241,60 @@ steps:
         finally:
             os.unlink(path)
 
+    def test_collect_without_output_schema_rejected(self):
+        from megalos_server.schema import validate_workflow
+        bad_yaml = """\
+name: bad
+description: collect missing output_schema
+category: testing
+output_format: text
+steps:
+  - id: gather
+    title: Gather
+    directive_template: Gather info.
+    gates: [done]
+    anti_patterns: [none]
+    collect: true
+"""
+        fd, path = tempfile.mkstemp(suffix=".yaml")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(bad_yaml)
+            errors, _ = validate_workflow(path)
+            assert any("gather" in e and "output_schema" in e for e in errors), errors
+        finally:
+            os.unlink(path)
+
+    def test_collect_with_output_schema_loads(self):
+        from megalos_server.schema import validate_workflow
+        good_yaml = """\
+name: good
+description: collect with schema
+category: testing
+output_format: text
+steps:
+  - id: gather
+    title: Gather
+    directive_template: Gather info.
+    gates: [done]
+    anti_patterns: [none]
+    collect: true
+    output_schema:
+      type: object
+      required: [x]
+      properties:
+        x:
+          type: string
+"""
+        fd, path = tempfile.mkstemp(suffix=".yaml")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(good_yaml)
+            errors, _ = validate_workflow(path)
+            assert errors == [], errors
+        finally:
+            os.unlink(path)
+
     def test_invalid_max_retries_caught(self):
         from megalos_server.schema import validate_workflow
         bad_yaml = """\
@@ -256,6 +319,54 @@ steps:
         finally:
             os.unlink(path)
 
+    def test_step_description_accepted(self):
+        from megalos_server.schema import validate_workflow
+        good_yaml = """\
+name: good
+description: step_description present
+category: testing
+output_format: text
+steps:
+  - id: s1
+    title: Step 1
+    step_description: A concise, action-oriented description.
+    directive_template: do it
+    gates: [done]
+    anti_patterns: [none]
+"""
+        fd, path = tempfile.mkstemp(suffix=".yaml")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(good_yaml)
+            errors, _ = validate_workflow(path)
+            assert errors == [], errors
+        finally:
+            os.unlink(path)
+
+    def test_step_description_non_string_rejected(self):
+        from megalos_server.schema import validate_workflow
+        bad_yaml = """\
+name: bad
+description: non-string step_description
+category: testing
+output_format: text
+steps:
+  - id: s1
+    title: Step 1
+    step_description: 42
+    directive_template: do it
+    gates: [done]
+    anti_patterns: [none]
+"""
+        fd, path = tempfile.mkstemp(suffix=".yaml")
+        try:
+            with os.fdopen(fd, "w") as f:
+                f.write(bad_yaml)
+            errors, _ = validate_workflow(path)
+            assert any("step_description" in e and "string" in e for e in errors), errors
+        finally:
+            os.unlink(path)
+
 
 _MINIMAL_YAML = """\
 name: toy
@@ -271,14 +382,14 @@ steps:
 """
 
 
-def test_workflow_without_schema_version_defaults_to_01():
+def test_workflow_without_schema_version_defaults_to_02():
     from megalos_server.schema import load_workflow
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(_MINIMAL_YAML)
         path = f.name
     try:
         doc = load_workflow(path)
-        assert doc["schema_version"] == "0.1"
+        assert doc["schema_version"] == "0.2"
     finally:
         os.unlink(path)
 

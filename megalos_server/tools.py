@@ -20,6 +20,19 @@ _DO_NOT_RULES = [
     "Do NOT reveal step names, step numbers, or internal workflow mechanics to the user. The workflow should feel like a natural conversation, not a numbered checklist. Never say things like 'Step 2: Decompose and Structure' or 'we are now in the plan phase'.",
 ]
 
+_CONVERSATION_REPAIR_DEFAULTS = {
+    "on_go_back": "Guide the user to use revise_step",
+    "on_cancel": "Confirm cancellation, then use delete_session",
+    "on_digression": "Acknowledge, then redirect to current step",
+    "on_clarification": "Re-explain the current step's directive more simply",
+}
+
+
+def _repair_for(workflow: dict) -> dict:
+    """Merge per-workflow conversation_repair overrides on top of defaults."""
+    overrides = workflow.get("conversation_repair") or {}
+    return {**_CONVERSATION_REPAIR_DEFAULTS, **overrides}
+
 
 def _find_step(workflow, step_id):
     """Find (index, step_dict) in a workflow by id. Returns (-1, None) if missing."""
@@ -41,6 +54,15 @@ def _resolve_session(session_id, workflows):
     return (session, wf), None
 
 
+def _format_validation_error(err) -> str:
+    """Format a jsonschema ValidationError as '<field_path>: <message>' or plain message at root."""
+    path = err.json_path  # e.g. "$", "$.title", "$.tags[0]"
+    if path == "$":
+        return err.message
+    field = path[2:] if path.startswith("$.") else path
+    return f"{field}: {err.message}"
+
+
 def _validate_output(content: str, step: dict) -> list[str] | None:
     """Validate content against step's output_schema. Returns error list or None if valid/no schema."""
     output_schema = step.get("output_schema")
@@ -51,7 +73,7 @@ def _validate_output(content: str, step: dict) -> list[str] | None:
     except (json.JSONDecodeError, TypeError) as e:
         return [f"Content is not valid JSON: {e}"]
     validator = jsonschema.Draft202012Validator(output_schema)
-    errors = [err.message for err in validator.iter_errors(parsed)]
+    errors = [_format_validation_error(err) for err in validator.iter_errors(parsed)]
     return errors if errors else None
 
 
@@ -160,6 +182,7 @@ def register_tools(mcp, workflows):
             "current_step": {"id": first_step["id"], "title": first_step["title"]},
             "directive": first_step["directive_template"],
             "do_not": _DO_NOT_RULES,
+            "conversation_repair": _repair_for(wf),
             "gates": first_step["gates"],
             "context": context,
         }
@@ -372,6 +395,7 @@ def register_tools(mcp, workflows):
                 result["next_step"] = {"id": nxt["id"], "title": nxt["title"]}
                 result["directive"] = nxt["directive_template"]
                 result["do_not"] = _DO_NOT_RULES
+                result["conversation_repair"] = _repair_for(wf)
                 result["gates"] = nxt["gates"]
                 if nxt.get("inject_context"):
                     result["injected_context"] = _assemble_context(nxt["inject_context"], step_data)
@@ -471,6 +495,7 @@ def register_tools(mcp, workflows):
             result["next_step"] = {"id": nxt["id"], "title": nxt["title"]}
             result["directive"] = nxt["directive_template"]
             result["do_not"] = _DO_NOT_RULES
+            result["conversation_repair"] = _repair_for(wf)
             result["gates"] = nxt["gates"]
             if nxt.get("inject_context"):
                 result["injected_context"] = _assemble_context(nxt["inject_context"], step_data)
@@ -513,6 +538,7 @@ def register_tools(mcp, workflows):
             "invalidated_steps": steps_after,
             "directive": target_step["directive_template"],
             "do_not": _DO_NOT_RULES,
+            "conversation_repair": _repair_for(wf),
             "gates": target_step["gates"],
         }
 

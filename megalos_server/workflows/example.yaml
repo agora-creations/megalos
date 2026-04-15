@@ -12,9 +12,18 @@ output_format: text
 steps:
   - id: clarify
     title: Clarify the Request
+    step_description: Capture the user's explicit goal in their own words before any response planning.
     directive_template: >-
       Ask the user what they want to accomplish. Do not assume — let the user
       state their goal in their own words before proceeding.
+    collect: true
+    output_schema:
+      type: object
+      required: [goal]
+      properties:
+        goal:
+          type: string
+          minLength: 3
     gates:
       - User has stated a concrete goal
     anti_patterns:
@@ -22,6 +31,7 @@ steps:
 
   - id: respond
     title: Provide a Response
+    step_description: Produce a single concise response directly addressing the captured goal.
     directive_template: >-
       Using the clarified goal, produce a short, direct response that addresses
       it. Keep it concise; this is a reference workflow, not a real product.
