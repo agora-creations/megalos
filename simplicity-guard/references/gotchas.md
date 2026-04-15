@@ -35,3 +35,17 @@ Append failure modes here: `## YYYY-MM-DD — title`, then **Failure:**, **Root 
 **Root cause:** The plan-slice inventory relies on an Explore-subagent grep pass, which scans for the token being renamed but doesn't disambiguate "prose mention" from "live reference that breaks if not updated lockstep." Shell tests of a renamed script, sandbox-path assertions in caveman/install/loc-budget tests, and hook files that read the renamed state dir were absent from the plan because the inventory pass didn't model "this test exercises code I'm about to rename."
 
 **Rule added:** When plan-slice produces a rename inventory, the dispatcher should grep once more for the rename target across `tests/`, `.claude/hooks/`, `.claude/lib/`, `.gitignore`, and the standalone simplicity-guard tree — *before* finalizing the task plan. Any test whose assertions or sandbox paths mention the rename target is a lockstep dependency and must be in the same task's file list. If a test's target file moves to a later task, defer the test's references to the later task too. The anti-pattern is "rename in task N, break tests in N, hope T06 catches it" — T06 is a verification gate, not a repair tool.
+
+## 2026-04-16 — phase-builder hits 30-turn ceiling on multi-site injection tasks
+
+**Failure:** Both M010/T01 and M010/T02 phase-builder dispatches exhausted the 30-turn `maxTurns` budget before completing the task contract. T01 ran out right before `uv run pytest` — all edits done, commit and tests still pending. T02 ran out after editing three of four `_DO_NOT_RULES` injection sites in `tools.py`; the fourth site (submit_step non-artifact path, ~line 497) was missed with the subagent's final message being `"Line 497 missed. Add."` In both cases the dispatcher completed the tail work inline (final edit + pytest + commit + summary) rather than respawning a second phase-builder for a few lines of wrap-up.
+
+**Root cause:** The phase-builder's 30-turn ceiling is calibrated for single-location edits with a short verify-and-commit tail. Multi-site injection tasks (tasks whose "Must-haves" enumerate a specific numbered set of injection sites ≥3) systematically run long because: (a) the agent verifies worktree base, (b) reads files even when content is inlined, (c) executes 4+ surgical edits with between-edit reads to confirm indentation, (d) the first `uv run pytest` invocation cold-starts a venv (~15s of one turn), (e) commit + summary is 2–3 more turns. The math doesn't fit in 30.
+
+**Rule added:**
+
+1. **Dispatcher contingency.** For any task whose plan enumerates ≥3 injection sites or whose Artifacts list contains ≥5 files, the dispatcher must be prepared to finish inline: if the subagent returns without `## Status: ✅`, read the worktree diff, apply any missed edits, run pytest, and commit in-dispatcher rather than re-dispatching a fresh 30-turn subagent for wrap-up work.
+2. **Plan-slice signal.** `/plan-slice` should flag any task with ≥3 injection sites as a yellow iron-rule case even when LOC budget looks small — injection-site count, not LOC, is the better predictor of turn consumption.
+3. **Future option.** If phase-builder's `maxTurns` becomes configurable, bump it to 50 for multi-site tasks. Until then, the dispatcher-fallback rule (#1) is the safety net.
+
+**Not applicable to:** content-rewrite tasks (T03, T04, T05, T06) where edits are localized to YAML/markdown content — those are single-surface and fit 30 turns comfortably.
