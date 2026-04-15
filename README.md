@@ -143,4 +143,4 @@ MIT. See `LICENSE`.
 ## Acknowledgements
 
 - [Rasa CALM](rasa.com/docs/learn/concepts/calm/) — Closest architectural analog. The central thesis is the same: "The LLM interprets what the user wants. The logic decides what happens next." YAML-defined flows, deterministic execution, separation of concerns. Enterprise-grade, proprietary runtime.
-- [Anthropic, "Code execution with MCP"](https://www.anthropic.com/engineering/code-execution-with-mcp) (November 2025) — source for progressive tool disclosure architecture, cited in the vision spec as a design constraint for the future autodidaktós client.
+- [Anthropic, "Code execution with MCP"](https://www.anthropic.com/engineering/code-execution-with-mcp) (November 2025) — source for progressive tool disclosure architecture, taken as a design constraint for the future autodidaktós client.
