@@ -6,12 +6,29 @@ persist. Use update_session (and the dedicated RMW helpers) to persist changes.
 """
 
 import json
+import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from . import db
+from . import db, errors
 
 COMPLETE = "__complete__"
+
+_log = logging.getLogger("megalos_server.state")
+
+
+def _log_eviction(reason: str, ids: list[str], **extra: object) -> None:
+    """Emit one INFO line per eviction event. One line per CALL, not per row."""
+    _log.info(
+        "session_eviction",
+        extra={
+            "event": "session_eviction",
+            "reason": reason,
+            "count": len(ids),
+            "session_ids": ids[:10],
+            **extra,
+        },
+    )
 
 
 def _now_iso() -> str:
@@ -42,11 +59,34 @@ _SELECT_COLS = (
 
 
 def create_session(workflow_type: str, current_step: str = "") -> str:
-    """Create a new session. Returns session ID."""
+    """Create a new session. Returns session ID.
+
+    If total session count would exceed MEGALOS_SESSION_CAP, evict oldest
+    completed sessions first (by completed_at ASC), falling through to oldest
+    active sessions (by updated_at ASC). Cap enforcement + INSERT are atomic.
+    """
     sid = uuid.uuid4().hex[:12]
     now = _now_iso()
     empty = "{}"
+    cap = errors.get_session_cap()
+    evicted_ids: list[str] = []
     with db.transaction() as conn:
+        count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        if count >= cap:
+            # Evict down to cap-1 so the new INSERT fits.
+            to_evict = count - (cap - 1)
+            rows = conn.execute(
+                "SELECT session_id FROM sessions "
+                "ORDER BY (current_step = ?) DESC, "
+                "COALESCE(completed_at, updated_at) ASC LIMIT ?",
+                (COMPLETE, to_evict),
+            ).fetchall()
+            evicted_ids = [r[0] for r in rows]
+            if evicted_ids:
+                conn.executemany(
+                    "DELETE FROM sessions WHERE session_id = ?",
+                    [(eid,) for eid in evicted_ids],
+                )
         conn.execute(
             "INSERT INTO sessions (session_id, workflow_type, current_step, "
             "step_data, retry_counts, step_visit_counts, escalation, "
@@ -54,6 +94,9 @@ def create_session(workflow_type: str, current_step: str = "") -> str:
             "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL)",
             (sid, workflow_type, current_step, empty, empty, empty, empty, now, now),
         )
+    # Log AFTER commit — if INSERT rolled back, DELETE rolled back too; don't lie.
+    if evicted_ids:
+        _log_eviction(reason="cap_exceeded", ids=evicted_ids, session_cap=cap)
     return sid
 
 
@@ -204,21 +247,27 @@ def count_active() -> int:
 
 
 def expire_sessions(ttl_hours: int = 24) -> list[str]:
-    """Delete sessions whose updated_at is older than ttl_hours. Returns deleted IDs."""
-    now = datetime.now(timezone.utc)
-    conn = db._get_conn()
-    rows = conn.execute("SELECT session_id, updated_at FROM sessions").fetchall()
-    expired: list[str] = []
-    for sid, updated_at in rows:
-        updated = datetime.fromisoformat(updated_at)
-        if (now - updated).total_seconds() > ttl_hours * 3600:
-            expired.append(sid)
-    if expired:
-        with db.transaction() as conn_w:
-            conn_w.executemany(
+    """Delete sessions past TTL. Returns deleted IDs.
+
+    Two-clause semantic: completed sessions expire when completed_at < cutoff;
+    active sessions expire when updated_at < cutoff.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=ttl_hours)).isoformat()
+    with db.transaction() as conn:
+        rows = conn.execute(
+            "SELECT session_id FROM sessions WHERE "
+            "(current_step = ? AND completed_at < ?) OR "
+            "(current_step != ? AND updated_at < ?)",
+            (COMPLETE, cutoff, COMPLETE, cutoff),
+        ).fetchall()
+        expired = [r[0] for r in rows]
+        if expired:
+            conn.executemany(
                 "DELETE FROM sessions WHERE session_id = ?",
                 [(sid,) for sid in expired],
             )
+    if expired:
+        _log_eviction(reason="ttl_expired", ids=expired, ttl_hours=ttl_hours)
     return expired
 
 
@@ -269,5 +318,14 @@ def _set_updated_at_for_test(session_id: str, iso_ts: str) -> None:
     with db.transaction() as conn:
         conn.execute(
             "UPDATE sessions SET updated_at = ? WHERE session_id = ?",
+            (iso_ts, session_id),
+        )
+
+
+def _set_completed_at_for_test(session_id: str, iso_ts: str) -> None:
+    """For tests only: backdate completed_at without touching other columns."""
+    with db.transaction() as conn:
+        conn.execute(
+            "UPDATE sessions SET completed_at = ? WHERE session_id = ?",
             (iso_ts, session_id),
         )

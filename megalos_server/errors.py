@@ -1,5 +1,7 @@
 """Error vocabulary, size caps, and response helper for megalos MCP server."""
 
+import os
+
 SESSION_NOT_FOUND = "session_not_found"
 INVALID_ARGUMENT = "invalid_argument"
 OVERSIZE_PAYLOAD = "oversize_payload"
@@ -15,6 +17,13 @@ CONCURRENT_WRITE_CONFLICT = "concurrent_write_conflict"  # reserved for S02
 CONTENT_MAX = 262_144
 ARTIFACT_MAX = 1_048_576
 YAML_MAX = 512_000
+
+SESSION_CAP = int(os.environ.get("MEGALOS_SESSION_CAP", "500"))
+
+
+def get_session_cap() -> int:
+    """Re-read MEGALOS_SESSION_CAP on each call. Tests use monkeypatch.setenv."""
+    return int(os.environ.get("MEGALOS_SESSION_CAP", "500"))
 
 
 def error_response(code: str, error: str, **fields: object) -> dict:
