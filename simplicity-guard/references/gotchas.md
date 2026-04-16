@@ -49,3 +49,11 @@ Append failure modes here: `## YYYY-MM-DD — title`, then **Failure:**, **Root 
 3. **Future option.** If phase-builder's `maxTurns` becomes configurable, bump it to 50 for multi-site tasks. Until then, the dispatcher-fallback rule (#1) is the safety net.
 
 **Not applicable to:** content-rewrite tasks (T03, T04, T05, T06) where edits are localized to YAML/markdown content — those are single-surface and fit 30 turns comfortably.
+
+## 2026-04-16 — T##-SUMMARY decisions can drift from the actual merged code
+
+**Failure:** M010/T02's summary (`T02-SUMMARY.md` Decision #3) stated that `REPAIR_KEYS` should be defined inline inside `validate_workflow` per the three-strikes rule ("only one consumer; extracting to module scope would be an anti-pattern"). The actual squash-merged code placed `REPAIR_KEYS` at module scope, contradicting the stated decision. The gap survived T02's sniff-test (which checked for must-haves, not decision-alignment) and was only caught during the T06 compression pass, one task later.
+
+**Root cause:** T02 ran into the 30-turn phase-builder ceiling, so the dispatcher finished inline (added the fourth injection site + pytest + commit). The decision entry in T02-SUMMARY was written from memory of the plan's stated preference, but the actual code placement was what the subagent produced before the ceiling hit — and the dispatcher completion didn't relocate it. The subagent's code shaped the artifact; the dispatcher's prose shaped the decision; they disagreed silently.
+
+**Rule added:** When the `/execute-task` dispatcher finishes a phase-builder run inline (per the 2026-04-16 multi-site injection gotcha), it MUST do one final read-reconcile pass before writing `T##-SUMMARY.md`: re-read the actual committed code for any pattern the summary's Decisions section is about to claim (constant placement, helper location, split-vs-inline choices). If the code disagrees with the decision the summary would record, either (a) fix the code to match the decision, or (b) record the code's actual shape as the decision with an explicit note. Do not record a decision the code does not honor — future compression passes will flag it, but a sniff-test between now and then may merge the inconsistency to main.
