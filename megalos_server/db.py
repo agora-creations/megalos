@@ -3,9 +3,12 @@
 import contextlib
 import os
 import sqlite3
+import threading
+from pathlib import Path
 from typing import Iterator
 
-DEFAULT_DB_PATH = ":memory:"
+# Anchor to repo layout: <repo>/megalos_server/db.py → <repo>/server/megalos_sessions.db
+DEFAULT_DB_PATH = str(Path(__file__).resolve().parent.parent / "server" / "megalos_sessions.db")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS sessions (
@@ -23,7 +26,7 @@ CREATE TABLE IF NOT EXISTS sessions (
 )
 """
 
-_conn: sqlite3.Connection | None = None
+_tls = threading.local()
 
 
 def _resolve_path() -> str:
@@ -31,18 +34,20 @@ def _resolve_path() -> str:
 
 
 def _get_conn() -> sqlite3.Connection:
-    global _conn
-    if _conn is not None:
-        return _conn
+    conn = getattr(_tls, "conn", None)
+    if conn is not None:
+        return conn
     path = _resolve_path()
+    if path != ":memory:":
+        os.makedirs(os.path.dirname(path), exist_ok=True)
     conn = sqlite3.connect(path, check_same_thread=False, timeout=5.0, isolation_level=None)
     if path != ":memory:":
         conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute(_SCHEMA)
-    _conn = conn
-    return _conn
+    _tls.conn = conn
+    return conn
 
 
 def init_schema() -> None:
@@ -66,8 +71,9 @@ def transaction() -> Iterator[sqlite3.Connection]:
 
 
 def _reset_for_test() -> None:
-    """For tests only: close and null the cached connection so a new path can take effect."""
-    global _conn
-    if _conn is not None:
-        _conn.close()
-        _conn = None
+    """For tests only. Closes the calling thread's connection BEFORE clearing
+    the reference so any tmp file handle is released deterministically."""
+    conn = getattr(_tls, "conn", None)
+    if conn is not None:
+        conn.close()
+        _tls.conn = None

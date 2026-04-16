@@ -20,7 +20,7 @@ EXPECTED_COLUMNS = {
 
 
 @pytest.fixture(autouse=True)
-def fresh_db(monkeypatch):
+def fresh_schema_db(monkeypatch, _isolated_db):  # depends on conftest's _isolated_db → runs after it
     monkeypatch.setenv("MEGALOS_DB_PATH", ":memory:")
     db._reset_for_test()
     yield

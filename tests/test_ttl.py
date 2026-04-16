@@ -10,7 +10,6 @@ from megalos_server import db, state
 
 @pytest.fixture(autouse=True)
 def fresh_db(monkeypatch):
-    monkeypatch.setenv("MEGALOS_DB_PATH", ":memory:")
     monkeypatch.setenv("MEGALOS_SESSION_CAP", "10")
     db._reset_for_test()
     yield
