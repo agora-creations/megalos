@@ -7,18 +7,10 @@ DIR="simplicity-guard"
 
 # --- Structure checks ---
 assert_file_exists "$DIR/SKILL.md" "standalone SKILL.md exists"
-assert_file_exists "$DIR/gemini-extension.json" "gemini-extension.json exists"
 assert_file_exists "$DIR/references/anti-patterns.md" "anti-patterns.md exists"
 assert_file_exists "$DIR/references/gotchas.md" "gotchas.md exists"
 assert_file_exists "$DIR/scripts/loc-budget.sh" "loc-budget.sh exists"
 assert_file_exists "$DIR/README.md" "README.md exists"
-
-# --- JSON validity ---
-TESTS_RUN=$((TESTS_RUN + 1))
-if ! jq . "$DIR/gemini-extension.json" > /dev/null 2>&1; then
-  TESTS_FAILED=$((TESTS_FAILED + 1))
-  echo "FAIL: gemini-extension.json is not valid JSON" >&2
-fi
 
 # --- SKILL.md has no megalos-specific paths ---
 assert_file_not_contains "$DIR/SKILL.md" ".megalos/STATE.md" "no .megalos/STATE.md in standalone SKILL.md"

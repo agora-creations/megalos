@@ -6,6 +6,7 @@ import re
 import jsonschema
 
 from . import state
+from .errors import error_response
 from .state import COMPLETE as _COMPLETE
 
 _DEFAULT_MAX_RETRIES = 3
@@ -47,10 +48,10 @@ def _resolve_session(session_id, workflows):
     try:
         session = state.get_session(session_id)
     except KeyError as e:
-        return None, {"error": str(e), "session_id": session_id}
+        return None, error_response("session_not_found", str(e), session_id=session_id)
     wf = workflows.get(session["workflow_type"])
     if not wf:
-        return None, {"error": f"Workflow '{session['workflow_type']}' not loaded", "session_id": session_id}
+        return None, error_response("workflow_not_loaded", f"Workflow '{session['workflow_type']}' not loaded", session_id=session_id)
     return (session, wf), None
 
 
@@ -161,15 +162,20 @@ def register_tools(mcp, workflows):
     def start_workflow(workflow_type: str, context: str) -> dict:
         """Start a new workflow session. Returns the first step's directive."""
         if workflow_type not in workflows:
-            return {
-                "error": f"Unknown workflow type: {workflow_type}",
-                "available_types": list(workflows.keys()),
-            }
+            return error_response(
+                "workflow_not_loaded",
+                f"Unknown workflow type: {workflow_type}",
+                available_types=list(workflows.keys()),
+            )
 
         active = state.count_active()
         if active >= 5:
             active_sessions = [s for s in state.list_sessions() if s["status"] == "active"]
-            return {"error": f"Session cap reached ({active}/5). Delete or complete a session first.", "active_sessions": active_sessions}
+            return error_response(
+                "session_cap_exceeded",
+                f"Session cap reached ({active}/5). Delete or complete a session first.",
+                active_sessions=active_sessions,
+            )
 
         wf = workflows[workflow_type]
         first_step = wf["steps"][0]
@@ -230,7 +236,11 @@ def register_tools(mcp, workflows):
 
         _, step = _find_step(wf, session["current_step"])
         if not step:
-            return {"error": f"Step '{session['current_step']}' not found in workflow", "session_id": session_id}
+            return error_response(
+                "schema_violation",
+                f"Step '{session['current_step']}' not found in workflow",
+                session_id=session_id,
+            )
 
         return {
             "session_id": session_id,
@@ -252,26 +262,29 @@ def register_tools(mcp, workflows):
 
         # Reject if session is escalated
         if session.get("escalation"):
-            return {
-                "error": "Session is escalated. Resolve the escalation before continuing.",
-                "session_id": session_id,
-                "escalation": session["escalation"],
-            }
+            return error_response(
+                "session_escalated",
+                "Session is escalated. Resolve the escalation before continuing.",
+                session_id=session_id,
+                escalation=session["escalation"],
+            )
 
         current = session["current_step"]
         if current == _COMPLETE:
-            return {
-                "error": "Workflow already complete. Call generate_artifact to get final output.",
-                "session_id": session_id,
-            }
+            return error_response(
+                "workflow_complete",
+                "Workflow already complete. Call generate_artifact to get final output.",
+                session_id=session_id,
+            )
 
         if step_id != current:
-            return {
-                "error": f"Out-of-order submission: expected '{current}', got '{step_id}'",
-                "session_id": session_id,
-                "expected_step": current,
-                "submitted_step": step_id,
-            }
+            return error_response(
+                "out_of_order_submission",
+                f"Out-of-order submission: expected '{current}', got '{step_id}'",
+                session_id=session_id,
+                expected_step=current,
+                submitted_step=step_id,
+            )
 
         steps = wf["steps"]
         idx, step = _find_step(wf, step_id)
@@ -281,12 +294,14 @@ def register_tools(mcp, workflows):
         if ia_list:
             if not artifact_id:
                 expected = [a["id"] for a in ia_list]
-                return {
-                    "error": "Step has intermediate_artifacts. Must specify artifact_id.",
-                    "session_id": session_id,
-                    "step_id": step_id,
-                    "expected_artifacts": expected,
-                }
+                return error_response(
+                    "invalid_argument",
+                    "Step has intermediate_artifacts. Must specify artifact_id.",
+                    field="artifact_id",
+                    session_id=session_id,
+                    step_id=step_id,
+                    expected_artifacts=expected,
+                )
             # Find matching artifact definition
             art_def = None
             for a in ia_list:
@@ -294,12 +309,13 @@ def register_tools(mcp, workflows):
                     art_def = a
                     break
             if not art_def:
-                return {
-                    "error": f"Unknown artifact_id '{artifact_id}'",
-                    "session_id": session_id,
-                    "step_id": step_id,
-                    "expected_artifacts": [a["id"] for a in ia_list],
-                }
+                return error_response(
+                    "unknown_artifact",
+                    f"Unknown artifact_id '{artifact_id}'",
+                    session_id=session_id,
+                    step_id=step_id,
+                    expected_artifacts=[a["id"] for a in ia_list],
+                )
             # Validate against artifact's schema
             try:
                 parsed = json.loads(content)
@@ -349,12 +365,13 @@ def register_tools(mcp, workflows):
                 if action == "escalate":
                     state.set_escalation(session_id, fired_guardrail["id"], fired_guardrail["message"])
                     state.update_session(session_id, step_data=step_data)
-                    return {
-                        "error": "Session escalated by guardrail.",
-                        "session_id": session_id,
-                        "guardrail_id": fired_guardrail["id"],
-                        "message": fired_guardrail["message"],
-                    }
+                    return error_response(
+                        "session_escalated",
+                        "Session escalated by guardrail.",
+                        session_id=session_id,
+                        guardrail_id=fired_guardrail["id"],
+                        message=fired_guardrail["message"],
+                    )
                 elif action == "warn":
                     guardrail_warning = fired_guardrail["message"]
 
@@ -365,11 +382,13 @@ def register_tools(mcp, workflows):
                 valid_targets = [b["next"] for b in step["branches"]]
                 target = branch if branch else step.get("default_branch", "")
                 if target not in valid_targets:
-                    return {
-                        "error": f"Invalid branch '{target}'. Valid options: {valid_targets}",
-                        "session_id": session_id,
-                        "step_id": step_id,
-                    }
+                    return error_response(
+                        "invalid_argument",
+                        f"Invalid branch '{target}'. Valid options: {valid_targets}",
+                        field="branch",
+                        session_id=session_id,
+                        step_id=step_id,
+                    )
                 next_step_id = target
             else:
                 is_last = idx == len(steps) - 1
@@ -446,12 +465,13 @@ def register_tools(mcp, workflows):
             if action == "escalate":
                 state.set_escalation(session_id, fired_guardrail["id"], fired_guardrail["message"])
                 state.update_session(session_id, step_data=step_data)
-                return {
-                    "error": "Session escalated by guardrail.",
-                    "session_id": session_id,
-                    "guardrail_id": fired_guardrail["id"],
-                    "message": fired_guardrail["message"],
-                }
+                return error_response(
+                    "session_escalated",
+                    "Session escalated by guardrail.",
+                    session_id=session_id,
+                    guardrail_id=fired_guardrail["id"],
+                    message=fired_guardrail["message"],
+                )
             elif action == "warn":
                 guardrail_warning = fired_guardrail["message"]
             # force_branch handled below during next-step determination
@@ -463,11 +483,13 @@ def register_tools(mcp, workflows):
             valid_targets = [b["next"] for b in step["branches"]]
             target = branch if branch else step.get("default_branch", "")
             if target not in valid_targets:
-                return {
-                    "error": f"Invalid branch '{target}'. Valid options: {valid_targets}",
-                    "session_id": session_id,
-                    "step_id": step_id,
-                }
+                return error_response(
+                    "invalid_argument",
+                    f"Invalid branch '{target}'. Valid options: {valid_targets}",
+                    field="branch",
+                    session_id=session_id,
+                    step_id=step_id,
+                )
             next_step_id = target
         else:
             is_last = idx == len(steps) - 1
@@ -519,10 +541,20 @@ def register_tools(mcp, workflows):
 
         target_idx, target_step = _find_step(wf, step_id)
         if target_idx < 0:
-            return {"error": f"Step '{step_id}' not found in workflow", "session_id": session_id}
+            return error_response(
+                "invalid_argument",
+                f"Step '{step_id}' not found in workflow",
+                field="step_id",
+                session_id=session_id,
+            )
 
         if step_id not in session["step_data"]:
-            return {"error": f"Step '{step_id}' has not been completed yet", "session_id": session_id}
+            return error_response(
+                "invalid_argument",
+                f"Step '{step_id}' has not been completed yet",
+                field="step_id",
+                session_id=session_id,
+            )
 
         previous_content = session["step_data"][step_id]
 
@@ -553,7 +585,7 @@ def register_tools(mcp, workflows):
         try:
             deleted = state.delete_session(session_id)
         except KeyError as e:
-            return {"error": str(e), "session_id": session_id}
+            return error_response("session_not_found", str(e), session_id=session_id)
         return {
             "session_id": deleted["session_id"],
             "workflow_type": deleted["workflow_type"],
@@ -578,11 +610,13 @@ def register_tools(mcp, workflows):
         if session["current_step"] != _COMPLETE:
             idx, _ = _find_step(wf, session["current_step"])
             remaining = [s["title"] for s in wf["steps"][idx:]]
-            return {
-                "error": "Workflow not complete. Finish all steps first.",
-                "session_id": session_id,
-                "remaining_steps": remaining,
-            }
+            return error_response(
+                "invalid_argument",
+                "Workflow not complete. Finish all steps first.",
+                field="session_state",
+                session_id=session_id,
+                remaining_steps=remaining,
+            )
 
         step_data = session["step_data"]
 

@@ -1,6 +1,0 @@
-{
-  "name": "simplicity-guard",
-  "description": "Enforces anti-bloat rules: KISS, DRY, YAGNI. Read references/anti-patterns.md and references/gotchas.md before any edit. Run scripts/loc-budget.sh after any write.",
-  "entry_point": "SKILL.md",
-  "tools": ["read_file", "run_shell_command"]
-}

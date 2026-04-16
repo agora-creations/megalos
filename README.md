@@ -119,10 +119,7 @@ A future authoring guide will document this end to end.
 
 ## simplicity-guard
 
-The anti-bloat skill at `simplicity-guard/`. Standalone — works with both Claude Code and Gemini CLI:
-
-- **Claude Code:** Copy `simplicity-guard/` into `.claude/skills/`
-- **Gemini CLI:** Reference `simplicity-guard/gemini-extension.json` in your settings
+The anti-bloat skill at `simplicity-guard/`. Copy into your project at `.claude/skills/simplicity-guard/` for Claude Code to auto-discover.
 
 Enforces explicit anti-defaults: no enterprise patterns, no premature abstractions (three-strikes rule), no dataclass for internal data, flat over nested config, boring beats clever, and the iron rule.
 
