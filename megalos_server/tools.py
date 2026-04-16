@@ -1,12 +1,13 @@
 """MCP tool functions for megalos workflow engine."""
 
+import functools
 import json
 import re
 
 import jsonschema
 
 from . import state
-from .errors import error_response
+from .errors import ARTIFACT_MAX, CONTENT_MAX, error_response
 from .state import COMPLETE as _COMPLETE
 
 _DEFAULT_MAX_RETRIES = 3
@@ -27,6 +28,35 @@ _CONVERSATION_REPAIR_DEFAULTS = {
     "on_digression": "Acknowledge, then redirect to current step",
     "on_clarification": "Re-explain the current step's directive more simply",
 }
+
+
+def _check_str(value: object, name: str, *, required: bool = False) -> dict | None:
+    """Return invalid_argument error_response if value isn't str (or empty when required)."""
+    if not isinstance(value, str):
+        return error_response(
+            "invalid_argument",
+            f"{name} must be a string, got {type(value).__name__}",
+            field=name,
+        )
+    if required and not value:
+        return error_response("invalid_argument", f"{name} must not be empty", field=name)
+    return None
+
+
+def _trap_errors(field: str = "unknown"):
+    """Decorator: convert KeyError → session_not_found, TypeError/ValueError → invalid_argument."""
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except KeyError as e:
+                sid = kwargs.get("session_id") or (args[0] if args and isinstance(args[0], str) else None)
+                return error_response("session_not_found", str(e), session_id=sid)
+            except (TypeError, ValueError) as e:
+                return error_response("invalid_argument", str(e), field=field)
+        return wrapper
+    return decorator
 
 
 def _repair_for(workflow: dict) -> dict:
@@ -138,6 +168,7 @@ def register_tools(mcp, workflows):
     """Register workflow tools on the FastMCP app."""
 
     @mcp.tool()
+    @_trap_errors("category")
     def list_workflows(category: str = "") -> dict:
         """List available workflow types, optionally filtered by category.
 
@@ -145,6 +176,9 @@ def register_tools(mcp, workflows):
         learning_development, professional, creative.
         Pass empty string or omit to list all.
         """
+        err = _check_str(category, "category")
+        if err:
+            return err
         items = []
         for name, wf in workflows.items():
             wf_cat = wf.get("category", "")
@@ -159,8 +193,12 @@ def register_tools(mcp, workflows):
         return {"workflows": items, "total": len(items)}
 
     @mcp.tool()
+    @_trap_errors("workflow_type")
     def start_workflow(workflow_type: str, context: str) -> dict:
         """Start a new workflow session. Returns the first step's directive."""
+        err = _check_str(workflow_type, "workflow_type", required=True) or _check_str(context, "context")
+        if err:
+            return err
         if workflow_type not in workflows:
             return error_response(
                 "workflow_not_loaded",
@@ -197,8 +235,12 @@ def register_tools(mcp, workflows):
         return result
 
     @mcp.tool()
+    @_trap_errors("session_id")
     def get_state(session_id: str) -> dict:
         """Get current session state: step, progress, and what's pending."""
+        err = _check_str(session_id, "session_id", required=True)
+        if err:
+            return err
         resolved, err = _resolve_session(session_id, workflows)
         if err:
             return err
@@ -227,8 +269,12 @@ def register_tools(mcp, workflows):
         return result
 
     @mcp.tool()
+    @_trap_errors("session_id")
     def get_guidelines(session_id: str) -> dict:
         """Get anti-patterns and gates for the current step."""
+        err = _check_str(session_id, "session_id", required=True)
+        if err:
+            return err
         resolved, err = _resolve_session(session_id, workflows)
         if err:
             return err
@@ -250,11 +296,21 @@ def register_tools(mcp, workflows):
         }
 
     @mcp.tool()
+    @_trap_errors("content")
     def submit_step(session_id: str, step_id: str, content: str, branch: str = "", artifact_id: str = "") -> dict:
         """Submit content for the current step. Enforces ordering — no skips, no backwards.
 
         branch: when the current step has branches, selects which step comes next.
         If empty and step has branches, default_branch is used as fallback."""
+        err = (
+            _check_str(session_id, "session_id", required=True)
+            or _check_str(step_id, "step_id", required=True)
+            or _check_str(content, "content")
+            or _check_str(branch, "branch")
+            or _check_str(artifact_id, "artifact_id")
+        )
+        if err:
+            return err
         resolved, err = _resolve_session(session_id, workflows)
         if err:
             return err
@@ -284,6 +340,18 @@ def register_tools(mcp, workflows):
                 session_id=session_id,
                 expected_step=current,
                 submitted_step=step_id,
+            )
+
+        content_bytes = len(content.encode("utf-8"))
+        if content_bytes > CONTENT_MAX:
+            return error_response(
+                "oversize_payload",
+                f"content exceeds {CONTENT_MAX} bytes ({content_bytes} bytes received)",
+                field="content",
+                max_bytes=CONTENT_MAX,
+                actual_bytes=content_bytes,
+                session_id=session_id,
+                step_id=step_id,
             )
 
         steps = wf["steps"]
@@ -531,9 +599,13 @@ def register_tools(mcp, workflows):
         return result
 
     @mcp.tool()
+    @_trap_errors("step_id")
     def revise_step(session_id: str, step_id: str) -> dict:
         """Revise a previously completed step. Resets current_step to the target,
         returns its previous content, and deletes all step_data after it."""
+        err = _check_str(session_id, "session_id", required=True) or _check_str(step_id, "step_id", required=True)
+        if err:
+            return err
         resolved, err = _resolve_session(session_id, workflows)
         if err:
             return err
@@ -575,13 +647,18 @@ def register_tools(mcp, workflows):
         }
 
     @mcp.tool()
+    @_trap_errors()
     def list_sessions() -> dict:
         """List all sessions with their status (active/completed)."""
         return {"sessions": state.list_sessions()}
 
     @mcp.tool()
+    @_trap_errors("session_id")
     def delete_session(session_id: str) -> dict:
         """Delete a session regardless of state. Returns what was deleted."""
+        err = _check_str(session_id, "session_id", required=True)
+        if err:
+            return err
         try:
             deleted = state.delete_session(session_id)
         except KeyError as e:
@@ -594,6 +671,7 @@ def register_tools(mcp, workflows):
         }
 
     @mcp.tool()
+    @_trap_errors("session_id")
     def generate_artifact(session_id: str, output_format: str = "auto") -> dict:
         """Generate final artifact from completed workflow. Rejects if workflow is not complete.
 
@@ -602,6 +680,9 @@ def register_tools(mcp, workflows):
         - "text": joins all step contents into a single string separated by double newlines.
         - "structured_code": returns a list of dicts, each with keys step_id, title, and content.
         """
+        err = _check_str(session_id, "session_id", required=True) or _check_str(output_format, "output_format")
+        if err:
+            return err
         resolved, err = _resolve_session(session_id, workflows)
         if err:
             return err
@@ -630,6 +711,20 @@ def register_tools(mcp, workflows):
             ]
         else:
             artifact = "\n\n".join(step_data.get(s["id"], "") for s in wf["steps"])
+
+        if isinstance(artifact, str):
+            artifact_bytes = len(artifact.encode("utf-8"))
+        else:
+            artifact_bytes = len(json.dumps(artifact).encode("utf-8"))
+        if artifact_bytes > ARTIFACT_MAX:
+            return error_response(
+                "oversize_payload",
+                f"artifact exceeds {ARTIFACT_MAX} bytes ({artifact_bytes} bytes serialized)",
+                field="artifact",
+                max_bytes=ARTIFACT_MAX,
+                actual_bytes=artifact_bytes,
+                session_id=session_id,
+            )
 
         return {
             "session_id": session_id,

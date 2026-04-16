@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastmcp import FastMCP
 
+from megalos_server.middleware import ValidationErrorMiddleware
 from megalos_server.schema import load_workflow
 from megalos_server.tools import register_tools
 
@@ -22,6 +23,7 @@ def create_app(workflow_dir: str | Path | None = None) -> FastMCP:
     if not workflows:
         raise RuntimeError(f"No workflow YAML files found in {wf_path}")
     mcp = FastMCP("megalos")
+    mcp.add_middleware(ValidationErrorMiddleware())  # type: ignore[attr-defined]
     register_tools(mcp, workflows)
     # Attach workflows dict for introspection / test mutation. Underscore = private.
     mcp._megalos_workflows = workflows  # type: ignore[attr-defined]

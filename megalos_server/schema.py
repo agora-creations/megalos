@@ -1,8 +1,12 @@
 """YAML workflow schema parsing."""
 
+import os
+
 import jsonschema
 import yaml
 from pathlib import Path
+
+from .errors import YAML_MAX
 
 
 REQUIRED_STEP_KEYS = {"id", "title", "directive_template", "gates", "anti_patterns"}
@@ -124,6 +128,14 @@ def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) ->
 
 def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     """Validate a workflow YAML file. Returns (errors, parsed_doc). Empty errors = valid."""
+    try:
+        size = os.path.getsize(path)
+    except OSError as e:
+        return [str(e)], None
+    if size > YAML_MAX:
+        raise RuntimeError(
+            f"Workflow YAML '{path}' is {size} bytes, exceeds YAML_MAX of {YAML_MAX} bytes"
+        )
     try:
         raw = Path(path).read_text()
     except (OSError, FileNotFoundError) as e:
