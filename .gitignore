@@ -30,6 +30,7 @@ SCRATCH.md
 2026-04-15-megalos-vision-v4.md
 docs/competitive-landscape-2026-04-16.md
 docs/gsd-commands.md
+docs/branch-protection.md
 
 # Private build process — how megálos is developed, not shipped to users
 megalos.py
