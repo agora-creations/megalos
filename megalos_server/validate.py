@@ -1,6 +1,5 @@
 """CLI entry point: validate a workflow YAML file."""
 
-import os  # DEMO 2 intentional unused import (M002 S02 regression matrix)
 import sys
 
 from .schema import validate_workflow
