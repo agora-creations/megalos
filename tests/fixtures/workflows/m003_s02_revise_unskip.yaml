@@ -1,0 +1,49 @@
+# m003_s02_revise_unskip.yaml — M003/S02/T02 fixture (b)
+#
+# Shape identical to fixture (a) — three steps, precondition on step_2 gated on
+# step_1.mode == run_me. The test exercises a revise-then-resubmit sequence:
+# submit step_1 with mode=skip_me (step_2 skipped), revise step_1 with
+# mode=run_me, resubmit → step_2 runs.
+
+schema_version: "0.3"
+name: m003_s02_revise_unskip
+description: Precondition revise-unskip fixture — revise step_1 to unskip step_2.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit mode
+    directive_template: Ask the user for a mode value.
+    gates:
+      - mode captured
+    anti_patterns:
+      - Guessing the mode
+    collect: true
+    output_schema:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Optional step
+    directive_template: Run optional side-work.
+    gates:
+      - side-work performed
+    anti_patterns:
+      - Running when not needed
+    precondition:
+      when_equals:
+        ref: step_data.step_1.mode
+        value: run_me
+
+  - id: step_3
+    title: Finalize
+    directive_template: Finalize the flow.
+    gates:
+      - finalized
+    anti_patterns:
+      - Skipping finalization

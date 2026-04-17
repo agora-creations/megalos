@@ -338,3 +338,139 @@ def test_get_state_surfaces_skipped_steps():
         assert st.get("skipped_steps") == ["step_2"]
     finally:
         _teardown_pc_workflow()
+
+
+# --- T02: Fixture-driven integration tests (six-path contract matrix) ---
+
+_FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "workflows")
+
+
+def _load_m003_fixture(name: str) -> str:
+    """Load an M003/S02 fixture into WORKFLOWS; return workflow key."""
+    from megalos_server.schema import load_workflow as _load
+    path = os.path.join(_FIXTURE_DIR, f"{name}.yaml")
+    doc = _load(path)
+    WORKFLOWS[name] = doc
+    return name
+
+
+def _teardown_m003_fixture(name: str) -> None:
+    state.clear_sessions()
+    WORKFLOWS.pop(name, None)
+
+
+def test_m003_s02_skip_continue():
+    """Fixture (a): skip-continue advances to step_3 and step_2 is absent."""
+    wf = _load_m003_fixture("m003_s02_skip_continue")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"mode": "skip_me"}'
+        })
+        assert r["next_step"]["id"] == "step_3"
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_revise_unskip():
+    """Fixture (b): revise step_1 to unskip step_2 (three-stage sequence)."""
+    wf = _load_m003_fixture("m003_s02_revise_unskip")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"mode": "skip_me"}'
+        })
+        assert r["next_step"]["id"] == "step_3"
+        r = call_tool("revise_step", {"session_id": sid, "step_id": "step_1"})
+        assert r["revised_step"]["id"] == "step_1"
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"mode": "run_me"}'
+        })
+        assert r["next_step"]["id"] == "step_2"
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_cascade_error():
+    """Fixture (c): step_3 refs skipped step_2 -> skipped_predecessor_reference error."""
+    wf = _load_m003_fixture("m003_s02_cascade_error")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"flag": "skip"}'
+        })
+        assert r.get("status") == "error"
+        assert r.get("code") == "skipped_predecessor_reference"
+        assert r.get("referenced_step") == "step_2"
+        assert r.get("referencing_field") == "precondition"
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_precondition_with_branches_runs_via_branch():
+    """Fixture (d) case 1: precondition true -> step_2 runs -> branches select step_3b."""
+    wf = _load_m003_fixture("m003_s02_precondition_with_branches")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"go": "yes"}'
+        })
+        assert r["next_step"]["id"] == "step_2"
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_2", "content": "chose B", "branch": "step_3b"
+        })
+        assert r["next_step"]["id"] == "step_3b"
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_precondition_with_branches_skip_bypasses_branch():
+    """Fixture (d) case 2: precondition false -> step_2 skipped -> linear fallback to step_3a."""
+    wf = _load_m003_fixture("m003_s02_precondition_with_branches")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"go": "no"}'
+        })
+        assert r["next_step"]["id"] == "step_3a"
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_inject_skipped():
+    """Fixture (e): get_state at step_3 surfaces injected_context with null content."""
+    wf = _load_m003_fixture("m003_s02_inject_skipped")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"mode": "skip"}'
+        })
+        st = call_tool("get_state", {"session_id": sid})
+        assert st["current_step"]["id"] == "step_3"
+        assert st["injected_context"] == [{"from": "step_2", "content": None}]
+    finally:
+        _teardown_m003_fixture(wf)
+
+
+def test_m003_s02_force_branch_override():
+    """Fixture (f): FORCE keyword -> force_branch to step_3; step_3 runs despite false precondition."""
+    wf = _load_m003_fixture("m003_s02_force_branch_override")
+    try:
+        r = call_tool("start_workflow", {"workflow_type": wf, "context": "test"})
+        sid = r["session_id"]
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_1", "content": '{"mode": "FORCE"}'
+        })
+        assert r["next_step"]["id"] == "step_3"
+        r = call_tool("submit_step", {
+            "session_id": sid, "step_id": "step_3", "content": "done"
+        })
+        assert r.get("status") == "workflow_complete"
+    finally:
+        _teardown_m003_fixture(wf)

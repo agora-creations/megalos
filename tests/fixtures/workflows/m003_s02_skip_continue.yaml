@@ -1,0 +1,48 @@
+# m003_s02_skip_continue.yaml — M003/S02/T02 fixture (a)
+#
+# Three-step workflow proving the skip-continue path:
+# step_1 emits `mode`; step_2 has `precondition: when_equals step_1.mode == skip_me`
+# so mode=skip_me → step_2 skipped → session advances to step_3.
+
+schema_version: "0.3"
+name: m003_s02_skip_continue
+description: Precondition skip-continue fixture — mode=skip_me skips step_2.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit mode
+    directive_template: Ask the user for a mode value.
+    gates:
+      - mode captured
+    anti_patterns:
+      - Guessing the mode
+    collect: true
+    output_schema:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Optional step
+    directive_template: Run optional side-work.
+    gates:
+      - side-work performed
+    anti_patterns:
+      - Running when not needed
+    precondition:
+      when_equals:
+        ref: step_data.step_1.mode
+        value: run_me
+
+  - id: step_3
+    title: Finalize
+    directive_template: Finalize the flow.
+    gates:
+      - finalized
+    anti_patterns:
+      - Skipping finalization

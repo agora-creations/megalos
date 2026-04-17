@@ -1,0 +1,59 @@
+# m003_s02_force_branch_override.yaml — M003/S02/T02 fixture (f)
+#
+# Three-step workflow proving force_branch overrides a false precondition:
+# step_3 has a precondition that is always false (mode=impossible_value).
+# A keyword_match guardrail on "FORCE" triggers force_branch to step_3.
+# Force wins: step_3 runs despite the false precondition.
+
+schema_version: "0.3"
+name: m003_s02_force_branch_override
+description: Force-branch guardrail overrides false precondition (anti-pattern demo).
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit mode
+    directive_template: Ask the user for a mode value. Say "FORCE" to override.
+    gates:
+      - mode captured
+    anti_patterns:
+      - Guessing the mode
+    collect: true
+    output_schema:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Middle step
+    directive_template: Middle work.
+    gates:
+      - middle work performed
+    anti_patterns:
+      - Skipping middle work
+
+  - id: step_3
+    title: Guarded step
+    directive_template: Guarded work that requires an impossible mode.
+    gates:
+      - guarded work performed
+    anti_patterns:
+      - Running without the impossible mode
+    precondition:
+      when_equals:
+        ref: step_data.step_1.mode
+        value: impossible_value
+
+guardrails:
+  - id: force-override
+    trigger:
+      type: keyword_match
+      patterns:
+        - FORCE
+    action: force_branch
+    target_step: step_3
+    message: FORCE keyword detected — routing to step_3.

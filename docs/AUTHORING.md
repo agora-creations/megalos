@@ -198,6 +198,68 @@ megálos is deliberately a flat, shallow schema. It does not have loops, subrout
 
 ---
 
+### 3f. Conditional skipping with `precondition` vs branching with `branches`
+
+A step-level `precondition` (shipped in M003, schema `v0.3`) declares a boolean predicate over earlier `step_data`. When the predicate evaluates false, the runtime skips the step entirely — the step never runs, never appears in `step_data`, and its id shows up in the `skipped_steps` list surfaced by `get_state`. `branches` is a different tool: it chooses which of several *next* steps to enter after the current step has already run. One tool skips a step; the other picks between next steps. Reach for them separately.
+
+**The two predicates.** `precondition` supports exactly two forms:
+
+- **`when_equals`** — run the step only when a ref resolves to a given value.
+  - *Good:* `ref: step_data.step_1.mode`, `value: run_me` — `step_1` is a `collect: true` step with an `output_schema` that guarantees a `mode` field. The ref is always resolvable when `step_1` ran.
+  - *Bad:* `ref: step_data.step_1.mode`, `value: run_me` when `step_1` has no `output_schema` for `mode`. The validator rejects the file (reject class d) because the sub-path is not guaranteed to exist.
+- **`when_present`** — run the step only when a predecessor produced any output at all.
+  - *Good:* `when_present: step_data.step_2` where `step_2` is a plain step with no precondition of its own. If it ran, it is present.
+  - *Bad:* `when_present: step_data.step_2` where `step_2` *also* has a precondition. If `step_2` is skipped, `step_3`'s `when_present` raises a cascade error (`skipped_predecessor_reference`) at runtime. Don't chain a `when_present` onto a conditionally-skipped predecessor — restructure so the dependency is unambiguous.
+
+**Worked example — combining `precondition` and `branches` on the same step:**
+
+```yaml
+steps:
+  - id: collect_mode
+    title: Collect mode
+    directive_template: Ask the user which path they want.
+    gates: [mode captured]
+    anti_patterns: [guessing]
+    collect: true
+    output_schema:
+      type: object
+      required: [mode]
+      properties:
+        mode: {type: string, enum: [fast, careful, skip]}
+
+  - id: review
+    title: Review
+    directive_template: Walk the user through a review pass.
+    gates: [review complete]
+    anti_patterns: [rushing]
+    precondition:
+      when_equals: {ref: step_data.collect_mode.mode, value: careful}
+    branches:
+      - {next: publish, condition: approved}
+      - {next: revise, condition: changes requested}
+    default_branch: publish
+
+  - id: revise
+    title: Revise
+    directive_template: Apply reviewer notes.
+    gates: [revisions applied]
+    anti_patterns: [ignoring feedback]
+
+  - id: publish
+    title: Publish
+    directive_template: Publish the artifact.
+    gates: [published]
+    anti_patterns: [skipping publish]
+```
+
+When `mode=fast` or `mode=skip`, `review` is skipped and the runtime falls through to `revise` (the linear next step). When `mode=careful`, `review` runs and then `branches` decides between `publish` and `revise`. Both tools cooperate: `precondition` decides whether the step runs at all, `branches` decides what runs next when the step *does* run.
+
+**Anti-pattern — `force_branch` onto a preconditioned step.** A guardrail that uses `action: force_branch` with `target_step` pointing at a step that has a `precondition` is an authoring contradiction. Force wins at runtime (the runtime enters the target step without evaluating the precondition), but anyone reading the workflow cannot predict which rule applies when. **Restructure the workflow** so the target step has no precondition, or so the guardrail targets a different step. Do not rely on the override.
+
+**Semantics of a false precondition.** When a step's predicate evaluates false, the step is *absent* from `step_data`. Downstream `inject_context: [{from: <skipped_step>}]` receives `{content: null}`. Downstream `when_present: step_data.<skipped_step>` raises `skipped_predecessor_reference`. Downstream `when_equals` with a sub-path into the skipped step also raises the same cascade error. Author every downstream step for the absent case — either guard it with its own precondition or stop referencing the skipped predecessor.
+
+---
+
 ## 4. Worked example — build `interview-prep.yaml`
 
 This section builds a complete workflow from zero, one stage at a time, so you see the schema grow under your hands. The finished file lives at [`docs/examples/interview-prep.yaml`](examples/interview-prep.yaml) — open it in a second editor pane if you want to compare against the end state as you go. It is shipped as a **teaching artifact**: not a production workflow, not registered with any server, and deliberately categorised as `teaching_example` so nobody confuses it with something a domain repo should pick up.

@@ -1,0 +1,59 @@
+# m003_s02_inject_skipped.yaml — M003/S02/T02 fixture (e)
+#
+# Four-step workflow proving inject_context handles skipped predecessors:
+# step_1 emits `mode`; step_2 skipped when mode=skip; step_3 has
+# `inject_context: [{from: step_2}]` — runtime returns {content: null}
+# for the absent skipped predecessor.
+
+schema_version: "0.3"
+name: m003_s02_inject_skipped
+description: Inject-context from a skipped predecessor fixture.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit mode
+    directive_template: Ask the user for a mode value.
+    gates:
+      - mode captured
+    anti_patterns:
+      - Guessing the mode
+    collect: true
+    output_schema:
+      type: object
+      required: [mode]
+      properties:
+        mode:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Optional step
+    directive_template: Produce optional context for step_3.
+    gates:
+      - optional context produced
+    anti_patterns:
+      - Producing when not needed
+    precondition:
+      when_equals:
+        ref: step_data.step_1.mode
+        value: run_me
+
+  - id: step_3
+    title: Consume step_2
+    directive_template: Consume step_2 context.
+    gates:
+      - step_2 context read
+    anti_patterns:
+      - Assuming step_2 is present
+    inject_context:
+      - from: step_2
+
+  - id: step_4
+    title: Finalize
+    directive_template: Finalize the flow.
+    gates:
+      - finalized
+    anti_patterns:
+      - Skipping finalization

@@ -1,0 +1,63 @@
+# m003_s02_precondition_with_branches.yaml — M003/S02/T02 fixture (d)
+#
+# Four-step workflow proving precondition + branches coexistence:
+# step_2 has BOTH `precondition` and `branches`. When go=yes → step_2 runs,
+# branches decide next (step_3a or step_3b). When go=no → step_2 skipped
+# entirely, linear fallback lands on step_3a, branches never consulted.
+
+schema_version: "0.3"
+name: m003_s02_precondition_with_branches
+description: Precondition + branches coexistence fixture.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit go
+    directive_template: Ask the user whether to proceed.
+    gates:
+      - go captured
+    anti_patterns:
+      - Guessing the go value
+    collect: true
+    output_schema:
+      type: object
+      required: [go]
+      properties:
+        go:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Route
+    directive_template: Pick a path based on user input.
+    gates:
+      - path selected
+    anti_patterns:
+      - Selecting without asking
+    precondition:
+      when_equals:
+        ref: step_data.step_1.go
+        value: "yes"
+    branches:
+      - next: step_3a
+        condition: user wants A
+      - next: step_3b
+        condition: user wants B
+    default_branch: step_3a
+
+  - id: step_3a
+    title: Path A
+    directive_template: Execute path A.
+    gates:
+      - A executed
+    anti_patterns:
+      - Skipping A
+
+  - id: step_3b
+    title: Path B
+    directive_template: Execute path B.
+    gates:
+      - B executed
+    anti_patterns:
+      - Skipping B
