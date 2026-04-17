@@ -17,6 +17,10 @@ __pycache__/
 .venv/
 uv.lock
 
+# Coverage artifacts
+.coverage
+htmlcov/
+
 # Runtime DB
 server/megalos_sessions.db
 
