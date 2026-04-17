@@ -1,6 +1,7 @@
 """YAML workflow schema parsing."""
 
 import os
+import re
 
 import jsonschema
 import yaml
@@ -10,6 +11,20 @@ from .errors import YAML_MAX
 
 
 REQUIRED_STEP_KEYS = {"id", "title", "directive_template", "gates", "anti_patterns"}
+
+_REF_SEGMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+
+
+def _is_valid_ref_path(ref: str) -> bool:
+    if not ref.startswith("step_data."):
+        return False
+    parts = ref.split(".")
+    if len(parts) < 2:
+        return False
+    for seg in parts[1:]:
+        if not _REF_SEGMENT_RE.match(seg):
+            return False
+    return True
 
 
 def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) -> None:
@@ -72,6 +87,40 @@ def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) ->
     if "default_branch" in step:
         if not isinstance(step["default_branch"], str):
             errors.append(f"Step '{label}' default_branch must be a string")
+    if "precondition" in step:
+        pc = step["precondition"]
+        if not isinstance(pc, dict):
+            errors.append(f"Step '{label}' precondition must be a mapping")
+        else:
+            known = {"when_equals", "when_present"}
+            keys = list(pc.keys())
+            unknown = [k for k in keys if k not in known]
+            if unknown:
+                errors.append(f"Step '{label}' precondition has unknown predicate key(s): {sorted(unknown)}; valid: {sorted(known)}")
+            present = [k for k in keys if k in known]
+            if len(present) == 0:
+                errors.append(f"Step '{label}' precondition must have exactly one of 'when_equals' or 'when_present'")
+            elif len(present) > 1:
+                errors.append(f"Step '{label}' precondition must have exactly one predicate, got: {sorted(present)}")
+            elif present[0] == "when_equals":
+                we = pc["when_equals"]
+                if not isinstance(we, dict):
+                    errors.append(f"Step '{label}' precondition.when_equals must be a mapping")
+                else:
+                    if "ref" not in we:
+                        errors.append(f"Step '{label}' precondition.when_equals missing required key 'ref'")
+                    elif not isinstance(we["ref"], str):
+                        errors.append(f"Step '{label}' precondition.when_equals.ref must be a string")
+                    elif not _is_valid_ref_path(we["ref"]):
+                        errors.append(f"Step '{label}' precondition.when_equals.ref is not a valid ref-path: {we['ref']}")
+                    if "value" not in we:
+                        errors.append(f"Step '{label}' precondition.when_equals missing required key 'value'")
+            elif present[0] == "when_present":
+                wp = pc["when_present"]
+                if not isinstance(wp, str):
+                    errors.append(f"Step '{label}' precondition.when_present must be a string")
+                elif not _is_valid_ref_path(wp):
+                    errors.append(f"Step '{label}' precondition.when_present.ref is not a valid ref-path: {wp}")
     if "directives" in step:
         d = step["directives"]
         if not isinstance(d, dict):
@@ -147,12 +196,12 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     errors = []
     if not isinstance(doc, dict):
         return [f"Workflow YAML must be a mapping, got {type(doc).__name__}"], None
-    # schema_version is optional; default to "0.2" when omitted. No value rejection — YAGNI.
+    # schema_version is optional; default to "0.3" when omitted. No value rejection — YAGNI.
     if "schema_version" in doc:
         if not isinstance(doc["schema_version"], str):
             errors.append("schema_version must be a string")
     else:
-        doc["schema_version"] = "0.2"
+        doc["schema_version"] = "0.3"
     if "conversation_repair" in doc:
         repair = doc["conversation_repair"]
         if not isinstance(repair, dict):

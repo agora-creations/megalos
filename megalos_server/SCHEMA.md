@@ -11,7 +11,7 @@ Every workflow YAML file must be a mapping with the following fields.
 | `category` | string | yes | Grouping tag (e.g. `professional`, `writing_communication`, `analysis_decision`). |
 | `output_format` | string | yes | Expected output type (e.g. `text`, `structured_code`). |
 | `steps` | list | yes | Ordered list of step mappings (at least one). |
-| `schema_version` | string | no (defaults to `"0.2"`) | Schema spec version this workflow targets. Omit to get the default. |
+| `schema_version` | string | no (defaults to `"0.3"`) | Schema spec version this workflow targets. Omit to get the default. |
 | `conversation_repair` | mapping | no | Optional overrides for default repair-behavior strings injected into step responses. See "Conversation repair defaults" section. |
 
 ## Step fields
@@ -27,6 +27,33 @@ Each entry in `steps` is a mapping with:
 | `anti_patterns` | list of strings | yes | Behaviours the LLM should avoid during this step. |
 | `step_description` | string | no | One-sentence, action-oriented summary of what this step does. Authoring metadata only — not injected into step responses. See "Directive quality" section for phrasing principles. |
 | `collect` | boolean | no | When `true`, the step is flagged as a structured data-collection step. The validator requires `output_schema` to be present on the same step. Used for steps where the LLM must gather specific, schema-conformant input from the user. |
+| `precondition` | mapping | no | Optional gate on whether this step is reachable, declared against prior-step output. Exactly one of two predicates: `when_equals` (scalar equality) or `when_present` (presence check). See "Precondition" section below. |
+
+## Precondition
+
+A step may declare a `precondition` mapping that gates whether it is reachable based on prior-step output. The grammar has exactly two predicates — never compounded, never coerced.
+
+**`when_equals`** — scalar equality against a ref-path:
+
+```yaml
+precondition:
+  when_equals:
+    ref: step_data.plan.depth
+    value: deep
+```
+
+**`when_present`** — presence check on a ref-path:
+
+```yaml
+precondition:
+  when_present: step_data.plan
+```
+
+Exactly one of `when_equals` or `when_present` must be present. Never both, never neither. No other predicate keys (no `and`, `or`, `not`, `when`, `if`, `unless`).
+
+**Ref-path grammar.** Refs must start with the literal prefix `step_data.`. After that prefix, segments are dot-split and each must match the identifier regex `^[A-Za-z_][A-Za-z0-9_-]*$`. No empty segments, no escaping, no brackets, no array indexing, no quoted keys. Valid: `step_data.plan`, `step_data.plan.depth`, `step_data.step_1.field_a`. Invalid: `step_data..foo`, `step_data.step_1."field.with.dots"`, `step_data.step_1.field[0]`.
+
+See `docs/AUTHORING.md` §X (landed in M003/S02) for worked examples, the precondition-vs-branches distinction, and cascade-error guidance.
 
 ## Validation rules
 
@@ -42,14 +69,15 @@ Multiple errors are reported at once when using `python3 -m megalos_server.valid
 
 ## Schema versioning
 
-The top-level `schema_version` field declares which schema spec a workflow targets. It is an optional string. When omitted, `load_workflow` fills in `"0.2"` as the default.
+The top-level `schema_version` field declares which schema spec a workflow targets. It is an optional string. When omitted, `load_workflow` fills in `"0.3"` as the default.
 
-Current version: **`0.2`**. This is the schema documented in this file.
+Current version: **`0.3`**. This is the schema documented in this file.
 
 | Version | Notes |
 |---------|-------|
 | `0.1`   | Initial schema (M009). |
 | `0.2`   | Adds the optional `collect` boolean on steps; `output_schema` validation errors now include a JSON field path prefix (e.g., `"title: ..."`). |
+| `0.3`   | Adds the optional `precondition` field on steps with `when_equals`/`when_present` predicates (M003/S01). |
 
 Future schema changes will bump this value explicitly. Unrecognized values pass through without error — the server does not currently reject future or unknown versions. (If cross-version incompatibility becomes a concern, rejection will be added then.)
 

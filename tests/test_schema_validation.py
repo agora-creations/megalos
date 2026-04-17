@@ -382,14 +382,14 @@ steps:
 """
 
 
-def test_workflow_without_schema_version_defaults_to_02():
+def test_workflow_without_schema_version_defaults_to_03():
     from megalos_server.schema import load_workflow
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write(_MINIMAL_YAML)
         path = f.name
     try:
         doc = load_workflow(path)
-        assert doc["schema_version"] == "0.2"
+        assert doc["schema_version"] == "0.3"
     finally:
         os.unlink(path)
 
