@@ -48,8 +48,6 @@ If your candidate workflow resembles any of the above — a single artifact with
 
 A megálos workflow is a single YAML file. The canonical reference is [`megalos_server/SCHEMA.md`](../megalos_server/SCHEMA.md); this section summarises the surface so you can author without flipping between files. For the minimal valid example, see [`megalos_server/workflows/example.yaml`](../megalos_server/workflows/example.yaml).
 
-The schema is **v0.2** as of M010. Fields `collect`, `conversation_repair`, and `step_description` are live.
-
 ### Top-level fields
 
 | Field | Type | Required | Purpose |
@@ -454,5 +452,3 @@ Restore the `id` line and you are back to `Valid.` This is the full authoring lo
 ### 6c. From validation to deployment
 
 Passing the validator means your workflow is loadable — every downstream runtime (the local `megalos-server`, a domain server on Horizon, a composed Remix) runs the same validator on startup, so a file that validates locally validates on deploy. It does **not** mean the workflow produces good conversations; that is what the design principles in [§3](#3-design-principles), the common mistakes in [§5](#5-common-mistakes), and a human reviewer are for.
-
-To deploy your workflow to production, see [`docs/deploying-a-domain-server.md`](deploying-a-domain-server.md).

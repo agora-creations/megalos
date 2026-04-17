@@ -4,17 +4,8 @@
 
 **A platform for authoring deterministic AI conversations.** YAML is the source code. An MCP server is the runtime. The LLM is a replaceable text engine that gets constrained, not unleashed.
 
-## Running gates locally
-
-```bash
-uv run pytest --cov && uv run ruff check megalos_server tests && uv run mypy megalos_server
-```
-
-`pytest --cov` runs the full test suite and emits a branch-coverage report. `ruff check` lints source and tests. `mypy` type-checks the runtime package. CI wraps these same four gates across Ubuntu × Python 3.10 + 3.12 — see [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
 ## Contents
 
-- [Running gates locally](#running-gates-locally)
 - [The thesis](#the-thesis)
 - [Architecture — three layers](#architecture--three-layers)
 - [The YAML schema](#the-yaml-schema)
