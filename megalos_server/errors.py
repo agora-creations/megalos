@@ -19,6 +19,8 @@ ARTIFACT_MAX = 1_048_576
 YAML_MAX = 512_000
 
 SESSION_CAP = int(os.environ.get("MEGALOS_SESSION_CAP", "500"))
+# DEMO 3 intentional type error (M002 S02 regression matrix)
+_DEMO3_BAD: int = "not an int"
 
 
 def get_session_cap() -> int:
