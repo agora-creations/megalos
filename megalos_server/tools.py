@@ -7,7 +7,7 @@ import re
 import jsonschema
 
 from . import state
-from .errors import ARTIFACT_MAX, CONTENT_MAX, error_response
+from .errors import ARTIFACT_MAX, CONTENT_MAX, SUB_WORKFLOW_PENDING, error_response
 from .state import COMPLETE as _COMPLETE
 
 _DEFAULT_MAX_RETRIES = 3
@@ -310,6 +310,8 @@ def _advance_parent(
     else:
         _, nxt = _find_step(parent_wf, next_step_id)
         result["next_step"] = {"id": nxt["id"], "title": nxt["title"]}
+        if nxt.get("call"):
+            result["next_step"]["call_target"] = nxt["call"]
         result["directive"] = nxt["directive_template"]
         result["do_not"] = _DO_NOT_RULES
         result["conversation_repair"] = _repair_for(parent_wf)
@@ -528,6 +530,8 @@ def register_tools(mcp, workflows):
         skipped = _compute_skipped_steps(wf, session["step_data"])
         if skipped:
             result["skipped_steps"] = skipped
+        if session.get("called_session"):
+            result["called_session"] = session["called_session"]
         return result
 
     @mcp.tool()
@@ -618,6 +622,28 @@ def register_tools(mcp, workflows):
 
         steps = wf["steps"]
         idx, step = _find_step(wf, step_id)
+
+        # Call-step concurrency guards (T04): submit_step is the wrong tool for call-steps.
+        if "call" in step:
+            called_sid = session.get("called_session")
+            if called_sid:
+                return error_response(
+                    "sub_workflow_pending",
+                    f"a child session '{called_sid}' is already in flight for call-step '{step_id}'. "
+                    f"Complete or revise the child, don't submit_step on the parent's call-step.",
+                    parent_session_id=session_id,
+                    child_session_id=called_sid,
+                    call_step_id=step_id,
+                )
+            return error_response(
+                "call_step_requires_enter_sub_workflow",
+                f"step '{step_id}' has `call: {step['call']}`. Use the `enter_sub_workflow` tool, "
+                f"not `submit_step`, to invoke the child workflow.",
+                session_id=session_id,
+                step_id=step_id,
+                hint="enter_sub_workflow",
+                call_target=step["call"],
+            )
 
         # Handle intermediate artifacts
         ia_list = step.get("intermediate_artifacts")
@@ -774,6 +800,8 @@ def register_tools(mcp, workflows):
             else:
                 _, nxt = _find_step(wf, next_step_id)
                 result["next_step"] = {"id": nxt["id"], "title": nxt["title"]}
+                if nxt.get("call"):
+                    result["next_step"]["call_target"] = nxt["call"]
                 result["directive"] = nxt["directive_template"]
                 result["do_not"] = _DO_NOT_RULES
                 result["conversation_repair"] = _repair_for(wf)
@@ -914,6 +942,8 @@ def register_tools(mcp, workflows):
         else:
             _, nxt = _find_step(wf, next_step_id)
             result["next_step"] = {"id": nxt["id"], "title": nxt["title"]}
+            if nxt.get("call"):
+                result["next_step"]["call_target"] = nxt["call"]
             result["directive"] = nxt["directive_template"]
             result["do_not"] = _DO_NOT_RULES
             result["conversation_repair"] = _repair_for(wf)
@@ -1062,7 +1092,7 @@ def register_tools(mcp, workflows):
 
         if parent_session.get("called_session"):
             return error_response(
-                "sub_workflow_pending",
+                SUB_WORKFLOW_PENDING,
                 "a child session is already in flight for this call-step",
                 child_session_id=parent_session["called_session"],
                 parent_session_id=parent_session_id,

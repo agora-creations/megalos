@@ -153,10 +153,11 @@ def update_session(session_id: str, **kwargs: object) -> None:
 
 
 def list_sessions() -> list[dict]:
-    """Return all sessions with status field (active/completed)."""
+    """Return all sessions with status field (active/completed) and parent link."""
     conn = db._get_conn()
     rows = conn.execute(
-        "SELECT session_id, workflow_type, current_step, created_at, updated_at FROM sessions"
+        "SELECT session_id, workflow_type, current_step, created_at, updated_at, "
+        "parent_session_id FROM sessions"
     ).fetchall()
     result = []
     for row in rows:
@@ -168,6 +169,7 @@ def list_sessions() -> list[dict]:
             "status": status,
             "created_at": row[3],
             "updated_at": row[4],
+            "parent_session_id": row[5],  # None for top-level sessions
         })
     return result
 
