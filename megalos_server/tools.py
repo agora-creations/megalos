@@ -364,6 +364,74 @@ def _wrap_child_failure_into_parent_escalation(
     )
 
 
+def _resume_parent_after_digression(child_session: dict, workflows: dict) -> dict:
+    """Digression-frame completion: pop frame, delete child, hand next-step directive
+    back to the outer session. No artifact propagation (digression-frames have no
+    data contract — the push_flow call is the entire handoff). Outer session
+    resumes at whatever current_step it was parked on when the push happened.
+    """
+    child_sid = child_session["session_id"]
+    outer_sid = state.parent_of(child_sid)
+    assert outer_sid is not None, "resume_parent_after_digression called on a root session"
+
+    outer_resolved, err = _resolve_session(outer_sid, workflows)
+    if err:
+        return err
+    outer_session, outer_wf = outer_resolved
+
+    state.delete_session(child_sid)
+
+    outer_current = outer_session["current_step"]
+    idx, current_step = _find_step(outer_wf, outer_current)
+    steps = outer_wf["steps"]
+
+    result: dict = {
+        "session_id": outer_sid,
+        "resumed_from_digression": True,
+        "child_session_id": child_sid,
+    }
+
+    if outer_current == _COMPLETE or current_step is None:
+        result["status"] = "workflow_complete"
+        result["message"] = "Outer workflow already complete; digression returned."
+        return result
+
+    result["current_step"] = {"id": current_step["id"], "title": current_step["title"]}
+    result["progress"] = f"step {idx + 1} of {len(steps)} resumed"
+    result["directive"] = current_step["directive_template"]
+    result["do_not"] = _DO_NOT_RULES
+    result["conversation_repair"] = _repair_for(outer_wf)
+    result["gates"] = current_step["gates"]
+    if current_step.get("inject_context"):
+        result["injected_context"] = _assemble_context(
+            current_step["inject_context"], outer_session["step_data"]
+        )
+    if current_step.get("directives"):
+        result["directives"] = current_step["directives"]
+    if current_step.get("call"):
+        result["current_step"]["call_target"] = current_step["call"]
+    if current_step.get("branches"):
+        result["branches"] = current_step["branches"]
+        if current_step.get("default_branch"):
+            result["default_branch"] = current_step["default_branch"]
+    return result
+
+
+def _auto_resume_on_top_frame_complete(
+    child_session: dict, child_wf: dict, workflows: dict
+) -> dict:
+    """Frame-type dispatch on child completion. Reads the child's own frame row to
+    decide: 'call' → propagate artifact to parent via M004 semantics; 'digression'
+    → pop and resume outer with no data handoff. No fallback reads — own_frame
+    is the stack-authoritative lookup.
+    """
+    own = state.own_frame(child_session["session_id"])
+    frame_type = own["frame_type"] if own else "call"  # defensive default matches M004
+    if frame_type == "digression":
+        return _resume_parent_after_digression(child_session, workflows)
+    return _propagate_to_parent(child_session, child_wf, workflows)
+
+
 def _propagate_to_parent(child_session: dict, child_wf: dict, workflows: dict) -> dict:
     """Bridge: child completed → propagate final artifact to parent, advance parent.
 
@@ -625,19 +693,25 @@ def register_tools(mcp, workflows):
         steps = wf["steps"]
         idx, step = _find_step(wf, step_id)
 
-        # Call-step concurrency guards (T04): submit_step is the wrong tool for call-steps.
+        # Generalized pending guard: refuse submit_step on any step if this session
+        # has a frame above it in the stack (call-frame from M004's enter_sub_workflow
+        # or digression-frame from M005's push_flow). The caller is submitting against
+        # a non-top session and should resolve the frame above first.
+        top = state.top_frame_for(session_id)
+        if top is not None:
+            called_sid = top["session_id"]
+            return error_response(
+                "sub_workflow_pending",
+                f"a child session '{called_sid}' is already in flight above session '{session_id}'. "
+                f"Complete or revise the child before submitting further steps.",
+                parent_session_id=session_id,
+                child_session_id=called_sid,
+                call_step_id=step_id,
+                frame_type=top["frame_type"],
+            )
+
+        # Call-step routing guard: submit_step is the wrong tool for call-steps.
         if "call" in step:
-            top = state.top_frame_for(session_id)
-            if top is not None:
-                called_sid = top["session_id"]
-                return error_response(
-                    "sub_workflow_pending",
-                    f"a child session '{called_sid}' is already in flight for call-step '{step_id}'. "
-                    f"Complete or revise the child, don't submit_step on the parent's call-step.",
-                    parent_session_id=session_id,
-                    child_session_id=called_sid,
-                    call_step_id=step_id,
-                )
             return error_response(
                 "call_step_requires_enter_sub_workflow",
                 f"step '{step_id}' has `call: {step['call']}`. Use the `enter_sub_workflow` tool, "
@@ -781,9 +855,11 @@ def register_tools(mcp, workflows):
                 state.increment_visit(session_id, next_step_id)
             state.update_session(session_id, current_step=next_step_id, step_data=step_data)
 
-            # Sub-workflow bridge: child completed → propagate to parent.
+            # Top-frame completion → frame-type dispatch: call-frames propagate
+            # the child's artifact to the parent (M004); digression-frames just
+            # pop and resume the outer session (M005).
             if next_step_id == _COMPLETE and state.parent_of(session_id) is not None:
-                return _propagate_to_parent(
+                return _auto_resume_on_top_frame_complete(
                     {**session, "current_step": next_step_id, "step_data": step_data},
                     wf,
                     workflows,
@@ -923,9 +999,11 @@ def register_tools(mcp, workflows):
 
         state.update_session(session_id, current_step=next_step_id, step_data=step_data)
 
-        # Sub-workflow bridge: child completed → propagate to parent.
+        # Top-frame completion → frame-type dispatch: call-frames propagate
+        # the child's artifact to the parent (M004); digression-frames just
+        # pop and resume the outer session (M005).
         if next_step_id == _COMPLETE and state.parent_of(session_id) is not None:
-            return _propagate_to_parent(
+            return _auto_resume_on_top_frame_complete(
                 {**session, "current_step": next_step_id, "step_data": step_data},
                 wf,
                 workflows,
@@ -975,24 +1053,27 @@ def register_tools(mcp, workflows):
             return err
         session, wf = resolved
 
-        # Parent-owned guard: if this session is a child whose parent still tracks it, refuse.
-        parent_sid = state.parent_of(session_id)
-        if parent_sid is not None:
-            parent_top = state.top_frame_for(parent_sid)
-            if parent_top is not None and parent_top["session_id"] == session_id:
-                try:
-                    parent_session = state.get_session(parent_sid)
-                except KeyError:
-                    parent_session = None
-                parent_current_step = parent_session.get("current_step", "") if parent_session else ""
-                return error_response(
-                    "sub_workflow_parent_owned",
-                    f"child session '{session_id}' is owned by parent '{parent_sid}' at "
-                    f"call-step '{parent_current_step}'. Revise the parent's call-step to unlink.",
-                    session_id=session_id,
-                    parent_session_id=parent_sid,
-                    call_step_id=parent_current_step,
-                )
+        # Parent-owned guard (generalized): refuse mutation of any framed session
+        # (call-frame or digression-frame) as long as it is still part of an active
+        # stack rooted at a parent. Enforced via own_frame(session_id) — a non-None
+        # return means this session has a stack row, i.e. a parent owns it.
+        own = state.own_frame(session_id)
+        if own is not None:
+            parent_sid = state.parent_of(session_id)
+            try:
+                parent_session = state.get_session(parent_sid) if parent_sid else None
+            except KeyError:
+                parent_session = None
+            parent_current_step = parent_session.get("current_step", "") if parent_session else ""
+            return error_response(
+                "sub_workflow_parent_owned",
+                f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                f"step '{parent_current_step}'. Revise the parent's step to unlink.",
+                session_id=session_id,
+                parent_session_id=parent_sid,
+                call_step_id=parent_current_step,
+                frame_type=own["frame_type"],
+            )
 
         target_idx, target_step = _find_step(wf, step_id)
         if target_idx < 0:
@@ -1103,6 +1184,7 @@ def register_tools(mcp, workflows):
                 child_session_id=pending_child["session_id"],
                 parent_session_id=parent_session_id,
                 call_step_id=call_step_id,
+                frame_type=pending_child["frame_type"],
             )
 
         target = call_step["call"]
@@ -1151,6 +1233,120 @@ def register_tools(mcp, workflows):
         return result
 
     @mcp.tool()
+    @_trap_errors("session_id")
+    def push_flow(
+        session_id: str, workflow_type: str, paused_at_step: str, context: str
+    ) -> dict:
+        """Interrupt the current session to run a different workflow as a digression.
+
+        Pushes a digression-frame above session_id running workflow_type. When the
+        digression completes, the outer session auto-resumes at paused_at_step.
+
+        session_id: the currently-active top session to pause.
+        workflow_type: workflow name to spawn as the digression.
+        paused_at_step: outer-flow step where the interrupt happens. Server validates
+            this matches outer.current_step (defensive echo; mirrors enter_sub_workflow's
+            call_step_id arg) — mismatch returns out_of_order_submission rather than
+            silently succeeding.
+        context: initial context string for the spawned digression, analogous to
+            start_workflow's context param. Digression frames have no authoring-time
+            context handoff (unlike call-frames with call_context_from), so the
+            client must seed context from the conversation on every push.
+        """
+        err = (
+            _check_str(session_id, "session_id", required=True)
+            or _check_str(workflow_type, "workflow_type", required=True)
+            or _check_str(paused_at_step, "paused_at_step", required=True)
+            or _check_str(context, "context")
+        )
+        if err:
+            return err
+
+        resolved, err = _resolve_session(session_id, workflows)
+        if err:
+            return err
+        outer_session, _outer_wf = resolved
+
+        if outer_session["current_step"] == _COMPLETE:
+            return error_response(
+                "workflow_complete",
+                "Outer workflow already complete — cannot push a digression.",
+                session_id=session_id,
+            )
+        if outer_session.get("escalation"):
+            return error_response(
+                "session_escalated",
+                "Outer session is escalated. Resolve the escalation before pushing a digression.",
+                session_id=session_id,
+                escalation=outer_session["escalation"],
+            )
+
+        if outer_session["current_step"] != paused_at_step:
+            return error_response(
+                "out_of_order_submission",
+                f"outer current_step is '{outer_session['current_step']}', not '{paused_at_step}'",
+                session_id=session_id,
+                expected_step=outer_session["current_step"],
+                submitted_step=paused_at_step,
+            )
+
+        # Generalized pending guard: outer must itself be at the top of its chain.
+        top = state.top_frame_for(session_id)
+        if top is not None:
+            return error_response(
+                SUB_WORKFLOW_PENDING,
+                f"a child session '{top['session_id']}' is already in flight above session "
+                f"'{session_id}'. Resolve it before pushing another digression.",
+                parent_session_id=session_id,
+                child_session_id=top["session_id"],
+                call_step_id=paused_at_step,
+                frame_type=top["frame_type"],
+            )
+
+        if workflow_type not in workflows:
+            return error_response(
+                "workflow_not_loaded",
+                f"Unknown workflow type: {workflow_type}",
+                available_types=list(workflows.keys()),
+            )
+
+        child_wf = workflows[workflow_type]
+        first_step = child_wf["steps"][0]
+        # create_session pushes a stack frame in the same transaction when
+        # parent_session_id is set. Pass frame_type='digression' and stamp
+        # call_step_id with paused_at_step (column is semantically overloaded:
+        # call-step ID for frame_type='call', paused_at_step for 'digression').
+        child_sid = state.create_session(
+            workflow_type,
+            current_step=first_step["id"],
+            parent_session_id=session_id,
+            frame_type="digression",
+            call_step_id=paused_at_step,
+        )
+        state.increment_visit(child_sid, first_step["id"])
+
+        frame_depth = state.stack_depth(
+            state.own_frame(child_sid)["root_session_id"]  # type: ignore[index]
+        )
+
+        result = {
+            "session_id": child_sid,
+            "workflow_type": workflow_type,
+            "frame_depth": frame_depth,
+            "current_step": {"id": first_step["id"], "title": first_step["title"]},
+            "directive": first_step["directive_template"],
+            "do_not": _DO_NOT_RULES,
+            "conversation_repair": _repair_for(child_wf),
+            "gates": first_step["gates"],
+            "context": context,
+            "parent_session_id": session_id,
+            "paused_at_step": paused_at_step,
+        }
+        if first_step.get("directives"):
+            result["directives"] = first_step["directives"]
+        return result
+
+    @mcp.tool()
     @_trap_errors()
     def list_sessions() -> dict:
         """List all sessions with their status (active/completed)."""
@@ -1163,24 +1359,26 @@ def register_tools(mcp, workflows):
         err = _check_str(session_id, "session_id", required=True)
         if err:
             return err
-        # Parent-owned guard: if this session is a child whose parent still tracks it, refuse.
-        parent_sid = state.parent_of(session_id)
-        if parent_sid is not None:
-            parent_top = state.top_frame_for(parent_sid)
-            if parent_top is not None and parent_top["session_id"] == session_id:
-                try:
-                    parent_session = state.get_session(parent_sid)
-                except KeyError:
-                    parent_session = None
-                parent_current_step = parent_session.get("current_step", "") if parent_session else ""
-                return error_response(
-                    "sub_workflow_parent_owned",
-                    f"child session '{session_id}' is owned by parent '{parent_sid}' at "
-                    f"call-step '{parent_current_step}'. Revise the parent's call-step to unlink.",
-                    session_id=session_id,
-                    parent_session_id=parent_sid,
-                    call_step_id=parent_current_step,
-                )
+        # Parent-owned guard (generalized): refuse deletion of any framed session
+        # (call-frame or digression-frame) while a parent still owns it. See the
+        # matching guard in revise_step for the mechanism.
+        own = state.own_frame(session_id)
+        if own is not None:
+            parent_sid = state.parent_of(session_id)
+            try:
+                parent_session = state.get_session(parent_sid) if parent_sid else None
+            except KeyError:
+                parent_session = None
+            parent_current_step = parent_session.get("current_step", "") if parent_session else ""
+            return error_response(
+                "sub_workflow_parent_owned",
+                f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                f"step '{parent_current_step}'. Revise the parent's step to unlink.",
+                session_id=session_id,
+                parent_session_id=parent_sid,
+                call_step_id=parent_current_step,
+                frame_type=own["frame_type"],
+            )
         try:
             deleted = state.delete_session(session_id)
         except KeyError as e:

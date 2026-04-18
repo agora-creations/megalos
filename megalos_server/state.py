@@ -63,7 +63,11 @@ _SELECT_COLS = (
 
 
 def create_session(
-    workflow_type: str, current_step: str = "", parent_session_id: str | None = None
+    workflow_type: str,
+    current_step: str = "",
+    parent_session_id: str | None = None,
+    frame_type: str = "call",
+    call_step_id: str | None = None,
 ) -> str:
     """Create a new session. Returns session ID.
 
@@ -75,6 +79,13 @@ def create_session(
     parent. Stored in parent_session_id column; never mutated after create.
     When set, a session_stack frame is pushed in the same transaction so the
     stack and the legacy column agree on commit.
+
+    frame_type: 'call' (default, M004 sub-workflow call) or 'digression'
+    (M005 push_flow). Only consulted when parent_session_id is set. The
+    call_step_id column on session_stack is semantically overloaded: it
+    stores the parent's call-step ID for frame_type='call' (stamped later
+    by set_called_session) and the paused_at_step for frame_type='digression'
+    (stamped directly here). Future cleanup can rename the column.
     """
     sid = uuid.uuid4().hex[:12]
     now = _now_iso()
@@ -126,8 +137,8 @@ def create_session(
                 child_depth = parent_row[1] + 1
             conn.execute(
                 "INSERT INTO session_stack (session_id, root_session_id, depth, "
-                "frame_type, call_step_id, created_at) VALUES (?, ?, ?, 'call', NULL, ?)",
-                (sid, root_sid, child_depth, now),
+                "frame_type, call_step_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (sid, root_sid, child_depth, frame_type, call_step_id, now),
             )
     # Log AFTER commit — if INSERT rolled back, DELETE rolled back too; don't lie.
     if evicted_ids:
@@ -441,6 +452,20 @@ def top_frame_for(session_id: str) -> dict | None:
         "SELECT session_id, root_session_id, depth, frame_type, call_step_id, created_at "
         "FROM session_stack WHERE root_session_id = ? AND depth = ?",
         (root_sid, next_depth),
+    ).fetchone()
+    return _frame_row_to_dict(row) if row else None
+
+
+def own_frame(session_id: str) -> dict | None:
+    """Return the stack row for session_id (session_id's own frame), or None
+    if session_id is a root (no stack row). Sibling of parent_of / top_frame_for
+    that answers 'what kind of frame am I?' uniformly for call and digression frames.
+    """
+    conn = db._get_conn()
+    row = conn.execute(
+        "SELECT session_id, root_session_id, depth, frame_type, call_step_id, created_at "
+        "FROM session_stack WHERE session_id = ?",
+        (session_id,),
     ).fetchone()
     return _frame_row_to_dict(row) if row else None
 
