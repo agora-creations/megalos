@@ -325,6 +325,43 @@ def _advance_parent(
     return result
 
 
+def _wrap_child_failure_into_parent_escalation(
+    child_session: dict,
+    child_wf: dict,
+    reason: str,
+    child_error: dict,
+) -> dict:
+    """If child has a parent, wrap its failure into a parent escalation.
+
+    Returns parent-escalation response with called_workflow_error wrapper.
+    If child has no parent (top-level session), returns child_error unchanged.
+    Uniform escalation label across all failure paths: "called_workflow_failed".
+    Specifics live inside the wrapper's child_error dict (code / reason).
+    """
+    parent_sid = child_session.get("parent_session_id")
+    if not parent_sid:
+        return child_error
+
+    child_sid = child_session["session_id"]
+    state.set_escalation(
+        parent_sid,
+        "called_workflow_failed",
+        f"child '{child_sid}' failed: {reason}",
+    )
+
+    wrapper = {
+        "child_session_id": child_sid,
+        "child_workflow_type": child_wf["name"],
+        "child_error": child_error,
+    }
+    return error_response(
+        "session_escalated",
+        f"parent escalated due to sub-workflow failure in child '{child_sid}'",
+        parent_session_id=parent_sid,
+        called_workflow_error=wrapper,
+    )
+
+
 def _propagate_to_parent(child_session: dict, child_wf: dict, workflows: dict) -> dict:
     """Bridge: child completed → propagate final artifact to parent, advance parent.
 
@@ -365,18 +402,16 @@ def _propagate_to_parent(child_session: dict, child_wf: dict, workflows: dict) -
     if call_step.get("output_schema"):
         validation_errors = _validate_output(artifact, call_step)
         if validation_errors is not None:
-            state.set_escalation(
-                parent_sid,
-                "sub_workflow_output_schema_fail",
-                f"child artifact failed parent call-step output_schema: {'; '.join(validation_errors)}",
-            )
-            return error_response(
-                "session_escalated",
-                "parent output_schema failed on child artifact",
-                parent_session_id=parent_sid,
-                child_session_id=child_sid,
-                call_step_id=call_step_id,
-                validation_errors=validation_errors,
+            child_error = {
+                "status": "validation_error",
+                "errors": validation_errors,
+                "session_id": child_sid,
+                "step_id": child_wf["steps"][-1]["id"],
+                "reason": "parent_output_schema_fail",
+                "message": "child artifact failed parent call-step output_schema",
+            }
+            return _wrap_child_failure_into_parent_escalation(
+                child_session, child_wf, reason="parent_output_schema_fail", child_error=child_error,
             )
 
     parent_step_data = parent_session["step_data"]
@@ -660,13 +695,18 @@ def register_tools(mcp, workflows):
                 if action == "escalate":
                     state.set_escalation(session_id, fired_guardrail["id"], fired_guardrail["message"])
                     state.update_session(session_id, step_data=step_data)
-                    return error_response(
+                    child_error = error_response(
                         "session_escalated",
                         "Session escalated by guardrail.",
                         session_id=session_id,
                         guardrail_id=fired_guardrail["id"],
                         message=fired_guardrail["message"],
                     )
+                    if session.get("parent_session_id"):
+                        return _wrap_child_failure_into_parent_escalation(
+                            session, wf, reason="guardrail_escalate", child_error=child_error,
+                        )
+                    return child_error
                 elif action == "warn":
                     guardrail_warning = fired_guardrail["message"]
 
@@ -694,7 +734,7 @@ def register_tools(mcp, workflows):
             try:
                 next_step_id, _ = _apply_skip_loop(next_step_id, wf, step_data, force_branched)
             except _SkippedPredecessor as e:
-                return error_response(
+                child_error = error_response(
                     "skipped_predecessor_reference",
                     f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
                     session_id=session_id,
@@ -702,6 +742,11 @@ def register_tools(mcp, workflows):
                     referenced_step=e.sid,
                     referencing_field="precondition",
                 )
+                if session.get("parent_session_id"):
+                    return _wrap_child_failure_into_parent_escalation(
+                        session, wf, reason="cascade_error", child_error=child_error,
+                    )
+                return child_error
 
             if next_step_id != _COMPLETE:
                 state.increment_visit(session_id, next_step_id)
@@ -749,7 +794,7 @@ def register_tools(mcp, workflows):
             max_retries = step.get("max_retries", _DEFAULT_MAX_RETRIES)
             retry_count = state.increment_retry(session_id, step_id)
             if retry_count >= max_retries:
-                return {
+                child_error = {
                     "status": "validation_error",
                     "errors": validation_errors,
                     "session_id": session_id,
@@ -757,6 +802,11 @@ def register_tools(mcp, workflows):
                     "retries_exhausted": True,
                     "message": f"Max retries ({max_retries}) exceeded. Workflow stalled.",
                 }
+                if session.get("parent_session_id"):
+                    return _wrap_child_failure_into_parent_escalation(
+                        session, wf, reason="schema_violation", child_error=child_error,
+                    )
+                return child_error
             err_result: dict = {
                 "status": "validation_error",
                 "errors": validation_errors,
@@ -782,13 +832,18 @@ def register_tools(mcp, workflows):
             if action == "escalate":
                 state.set_escalation(session_id, fired_guardrail["id"], fired_guardrail["message"])
                 state.update_session(session_id, step_data=step_data)
-                return error_response(
+                child_error = error_response(
                     "session_escalated",
                     "Session escalated by guardrail.",
                     session_id=session_id,
                     guardrail_id=fired_guardrail["id"],
                     message=fired_guardrail["message"],
                 )
+                if session.get("parent_session_id"):
+                    return _wrap_child_failure_into_parent_escalation(
+                        session, wf, reason="guardrail_escalate", child_error=child_error,
+                    )
+                return child_error
             elif action == "warn":
                 guardrail_warning = fired_guardrail["message"]
             # force_branch handled below during next-step determination
@@ -817,7 +872,7 @@ def register_tools(mcp, workflows):
         try:
             next_step_id, _ = _apply_skip_loop(next_step_id, wf, step_data, force_branched)
         except _SkippedPredecessor as e:
-            return error_response(
+            child_error = error_response(
                 "skipped_predecessor_reference",
                 f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
                 session_id=session_id,
@@ -825,6 +880,11 @@ def register_tools(mcp, workflows):
                 referenced_step=e.sid,
                 referencing_field="precondition",
             )
+            if session.get("parent_session_id"):
+                return _wrap_child_failure_into_parent_escalation(
+                    session, wf, reason="cascade_error", child_error=child_error,
+                )
+            return child_error
 
         # Track visit count for the next step
         if next_step_id != _COMPLETE:
@@ -881,6 +941,24 @@ def register_tools(mcp, workflows):
         if err:
             return err
         session, wf = resolved
+
+        # Parent-owned guard: if this session is a child whose parent still tracks it, refuse.
+        if session.get("parent_session_id"):
+            parent_sid = session["parent_session_id"]
+            try:
+                parent_session = state.get_session(parent_sid)
+            except KeyError:
+                parent_session = None
+            if parent_session and parent_session.get("called_session") == session_id:
+                parent_current_step = parent_session.get("current_step", "")
+                return error_response(
+                    "sub_workflow_parent_owned",
+                    f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                    f"call-step '{parent_current_step}'. Revise the parent's call-step to unlink.",
+                    session_id=session_id,
+                    parent_session_id=parent_sid,
+                    call_step_id=parent_current_step,
+                )
 
         target_idx, target_step = _find_step(wf, step_id)
         if target_idx < 0:
@@ -1049,6 +1127,27 @@ def register_tools(mcp, workflows):
         err = _check_str(session_id, "session_id", required=True)
         if err:
             return err
+        # Parent-owned guard: if this session is a child whose parent still tracks it, refuse.
+        try:
+            session = state.get_session(session_id)
+        except KeyError:
+            session = None
+        if session and session.get("parent_session_id"):
+            parent_sid = session["parent_session_id"]
+            try:
+                parent_session = state.get_session(parent_sid)
+            except KeyError:
+                parent_session = None
+            if parent_session and parent_session.get("called_session") == session_id:
+                parent_current_step = parent_session.get("current_step", "")
+                return error_response(
+                    "sub_workflow_parent_owned",
+                    f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                    f"call-step '{parent_current_step}'. Revise the parent's call-step to unlink.",
+                    session_id=session_id,
+                    parent_session_id=parent_sid,
+                    call_step_id=parent_current_step,
+                )
         try:
             deleted = state.delete_session(session_id)
         except KeyError as e:

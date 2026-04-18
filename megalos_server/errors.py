@@ -22,6 +22,7 @@ CALL_BRANCHES_WITHOUT_DEFAULT = "call_branches_without_default"
 UNKNOWN_CALL_TARGET = "unknown_call_target"
 CALL_CYCLE_DETECTED = "call_cycle_detected"
 SUB_WORKFLOW_RUNTIME_NOT_IMPLEMENTED = "sub_workflow_runtime_not_implemented"
+SUB_WORKFLOW_PARENT_OWNED = "sub_workflow_parent_owned"
 
 CONTENT_MAX = 262_144
 ARTIFACT_MAX = 1_048_576
