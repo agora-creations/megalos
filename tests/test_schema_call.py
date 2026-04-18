@@ -6,7 +6,7 @@ Also cross-workflow validation: call target existence + cycle detection (M004/S0
 import os
 import tempfile
 
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 from megalos_server import create_app
 from megalos_server.schema import validate_workflow, validate_workflow_calls
@@ -161,6 +161,44 @@ steps:
 """
     errors = _write_and_validate(yaml_str)
     assert any("call_with_intermediate_artifacts" in e for e in errors), errors
+
+
+def test_call_with_branches_without_default_branch_rejected():
+    yaml_str = """\
+name: call_branches_no_default
+description: call + branches requires default_branch for S02 runtime propagation
+category: testing
+output_format: text
+steps:
+  - id: step_1
+    title: First
+    directive_template: do it
+    gates: [done]
+    anti_patterns: [none]
+  - id: step_2
+    title: Sub
+    directive_template: hand off
+    gates: [done]
+    anti_patterns: [none]
+    call: child_wf
+    branches:
+      - next: step_3
+        condition: success path
+      - next: step_4
+        condition: fallback path
+  - id: step_3
+    title: Third
+    directive_template: keep going
+    gates: [done]
+    anti_patterns: [none]
+  - id: step_4
+    title: Fourth
+    directive_template: alt path
+    gates: [done]
+    anti_patterns: [none]
+"""
+    errors = _write_and_validate(yaml_str)
+    assert any("call_branches_without_default" in e for e in errors), errors
 
 
 def test_call_context_from_without_call_rejected():

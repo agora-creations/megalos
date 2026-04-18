@@ -137,6 +137,13 @@ def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) ->
                 f"sub-workflow steps cannot also produce intermediate artifacts "
                 f"(code: call_with_intermediate_artifacts)"
             )
+        if "branches" in step and "default_branch" not in step:
+            errors.append(
+                f"Step '{label}' has both 'call' and 'branches' but no 'default_branch'; "
+                f"post-hoc branch selection on sub-workflow return is not supported — "
+                f"call-steps with branches must declare a default_branch "
+                f"(code: call_branches_without_default)"
+            )
     if "call_context_from" in step:
         ccf = step["call_context_from"]
         if not isinstance(ccf, str):
