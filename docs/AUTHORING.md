@@ -9,9 +9,10 @@ megálos is a deterministic, lightweight conversational workflow runtime. It bor
 1. [When does a structured workflow beat free-form chat?](#1-when-does-a-structured-workflow-beat-free-form-chat)
 2. [Schema reference](#2-schema-reference)
 3. [Design principles](#3-design-principles)
-4. [Worked example — build `interview-prep.yaml`](#4-worked-example--build-interview-prepyaml)
-5. [Common mistakes](#5-common-mistakes)
-6. [Validation workflow](#6-validation-workflow)
+4. [Composing workflows with `call:`](#4-composing-workflows-with-call)
+5. [Worked example — build `interview-prep.yaml`](#5-worked-example--build-interview-prepyaml)
+6. [Common mistakes](#6-common-mistakes)
+7. [Validation workflow](#7-validation-workflow)
 
 ---
 
@@ -262,7 +263,76 @@ When `mode=fast` or `mode=skip`, `review` is skipped and the runtime falls throu
 
 ---
 
-## 4. Worked example — build `interview-prep.yaml`
+## 4. Composing workflows with `call:`
+
+Shipped in M004 (schema `v0.3`), the `call:` primitive lets one workflow delegate a phase to another workflow and receive a single structured result back. A call-step spawns a **child session**, runs it to completion, then resumes the parent with the child's final `step_data` pinned under the call-step's id. One seam, no other side channels. Read this section after §3 — the design principles apply inside the child just as they do in the parent.
+
+### 4a. When to reach for a sub-workflow
+
+A `call:` earns its place when a distinct phase of work already has a natural shape of its own. Three signals:
+
+- A self-contained subproblem **recurs across workflows** — the same three-step research brief, review pass, or scoping conversation you would otherwise copy-paste between files. One child, many callers.
+- A phase has **its own natural end state and artifact** — it reads like a workflow in miniature, with its own gates, and the parent only cares about the final output.
+- A single workflow's step count has crept **past what you can hold in your head** while reading the file. Past roughly seven steps you are already at the expressiveness ceiling ([§3e](#3e-the-expressiveness-ceiling)); a `call:` is the compositional answer.
+
+Anti-criteria — do **not** reach for `call:` when:
+
+- You want **conditional next-step selection**. That is what `branches` is for ([§3f](#3f-conditional-skipping-with-precondition-vs-branching-with-branches)).
+- You want to **skip a step based on earlier data**. That is `precondition`.
+- You are **splitting one workflow into two purely to hide steps from the reader**. Splitting for readability is fine, but compose with `call:` only if the child also earns its place as a standalone workflow.
+
+### 4b. The parent-child contract (four fields)
+
+The contract is four fields on the parent's call-step, and nothing else:
+
+- **`call: <child_workflow_name>`** — names the child workflow to spawn. The child must already be registered with the runtime.
+- **`call_context_from: step_data.<path>`** (optional) — a subtree extracted from parent `step_data` is injected into the child session's `context` at spawn time. Use this to hand the child exactly the inputs it needs, no more. Omit to spawn with empty context.
+- **`output_schema`** (optional) — JSON-Schema-style mapping the child's final `step_data` value must satisfy. On mismatch the parent receives an escalation (see [§4e](#4e-when-a-child-fails)); on pass the call-step advances.
+- **The return seam.** When the child terminates successfully, its final step's content becomes `parent.step_data[call_step_id]`. Parent steps downstream read the call-step's id the same way they read any other step's output — through `inject_context`, `when_equals`, or `branches` conditions. There are no other channels: no shared state, no cross-session variables, no callbacks.
+
+### 4c. A worked snippet
+
+Minimal shape reference, drawn from `tests/fixtures/workflows/m004_s03_output_schema_pass_parent.yaml`:
+
+```yaml
+steps:
+  - id: p2
+    title: Delegate and validate
+    directive_template: Hand off and expect a verdict back.
+    gates: [handoff performed]
+    anti_patterns: [Accepting invalid verdict]
+    call: m004_s03_output_schema_pass_child
+    call_context_from: step_data.p1.topic
+    output_schema:
+      type: object
+      required: [verdict]
+      properties:
+        verdict:
+          type: string
+          minLength: 2
+```
+
+Three things to notice. First, the call-step still carries the normal five required fields (`id`, `title`, `directive_template`, `gates`, `anti_patterns`) — a call-step *is* a step. Second, `call_context_from` is a dotted path into parent `step_data`, not a free expression; the extracted subtree lands in the child's `context` verbatim. Third, `output_schema` here validates the child's final artifact, not the parent's own collect step — same schema shape as a `collect: true` step, different target.
+
+**YAML gotcha — inline mappings in `directive_template` strings.** The parser treats a bare colon inside an unquoted scalar as a key separator. A directive like `Return {verdict: "approved"}` will fail to load because the embedded `{verdict: "..."}` parses as a nested mapping. Either describe the shape in prose (`Return a verdict field holding "approved" or "rejected"`), or wrap the directive in block-literal `|-` or quoted form so the mapping-looking text is protected. T01 hit this during authoring; it will bite you too the first time you paste a JSON-shaped example into a directive.
+
+### 4d. Revising the call-step
+
+Revising a call-step is the parent-owned lever for re-running a child from scratch. When you call `revise_step` on the parent's call-step, the runtime discards the existing child session and the call-step re-spawns a fresh child on the next submission — clean slate. Successful children **auto-terminate on propagation**, so there is nothing to clean up there. Failed children are **retained**, inspectable via `get_state`, but read-only: direct `revise_step` or `delete_session` on the child returns `sub_workflow_parent_owned`. The mental model is simple: the call-step owns its child. Touch the parent's call-step to rerun, not the child directly.
+
+### 4e. When a child fails
+
+Any child-side failure — a cascade error, a guardrail escalation, a final-step `output_schema` mismatch — is wrapped into the **parent's** escalation response under a `called_workflow_error` envelope. The envelope carries three fields: `child_session_id` (for forensic `get_state` lookups), `child_workflow_type` (which workflow was running), and `child_error` (the underlying error payload). The parent handles the escalation the same way it handles any other escalation; the retained child is available for inspection, not continued interaction.
+
+**Cascade-trigger lineage.** The canonical shape for producing a cascade inside a child (skip-loop that exhausts its predecessors) already lives on disk at `tests/fixtures/workflows/m003_s02_cascade_error.yaml` and was lifted verbatim into `tests/fixtures/workflows/m004_s03_cascade_wrap_child.yaml`. If you need a child that cascades on purpose (for tests, or to rehearse a failure path), start from that shape rather than inventing a new one.
+
+### 4f. Session-cap cost
+
+A serial `call:` chain — parent calls child A, which calls child B, which calls child C — stays bounded at **two active session-cap slots** (the parent plus whichever child is currently running). Successful children auto-terminate on propagation, freeing their slot before the next link in the chain spawns. Only **failed** children linger, one slot per retained child, until the author revises the corresponding call-step in the parent. This keeps the session-cap cost of composition predictable: the cap penalty is bounded by the depth of unresolved failures, not the depth of the nominal call graph.
+
+---
+
+## 5. Worked example — build `interview-prep.yaml`
 
 This section builds a complete workflow from zero, one stage at a time, so you see the schema grow under your hands. The finished file lives at [`docs/examples/interview-prep.yaml`](examples/interview-prep.yaml) — open it in a second editor pane if you want to compare against the end state as you go. It is shipped as a **teaching artifact**: not a production workflow, not registered with any server, and deliberately categorised as `teaching_example` so nobody confuses it with something a domain repo should pick up.
 
@@ -276,7 +346,7 @@ The workflow walks a candidate through interview preparation in five steps, foll
 
 We will not get there in one leap. Each sub-section below adds a little more of the schema until the file passes the validator.
 
-### 4a. Top-level fields
+### 5a. Top-level fields
 
 Every workflow starts with four required top-level strings plus a non-empty `steps` list. Start a new file at `docs/examples/interview-prep.yaml` with just the header:
 
@@ -298,7 +368,7 @@ Why each field:
 
 `steps: []` is a placeholder. The validator will reject this as-is (it requires at least one step), which is fine: we are about to add one.
 
-### 4b. The first step skeleton
+### 5b. The first step skeleton
 
 A step needs five required fields: `id`, `title`, `directive_template`, `gates`, and `anti_patterns`. Replace the empty `steps` list with a first step:
 
@@ -316,7 +386,7 @@ steps:
 
 The `directive_template` is the heart of the step — it is the prompt the LLM will act on. Notice the shape: a concrete action (`Ask`), a specific observable output (three named fields), and an explicit prohibition (`Do not begin ... until all three are captured`). This is the directive-quality rule from [§3b](#3b-directive-quality-rules) applied end-to-end. A weaker version — *"Help the user identify what role they want to prep for"* — would be shorter and also useless, because it names no action the LLM can verify it took.
 
-### 4c. Adding `gates` and `anti_patterns`
+### 5c. Adding `gates` and `anti_patterns`
 
 Empty `gates` and `anti_patterns` lists parse, but they leave the step with no quality floor and no prohibitions. Fill them in:
 
@@ -340,7 +410,7 @@ Each gate is testable by reading the transcript — the [§3c](#3c-gate-design) 
 
 Rule of thumb: if every one of your `anti_patterns` would apply to any step of any workflow, you are restating the built-ins. Cut them and add something step-specific, or leave the list short.
 
-### 4d. Turning it into a `collect` step with an `output_schema`
+### 5d. Turning it into a `collect` step with an `output_schema`
 
 `identify_role` is not trying to reason or produce prose — its whole job is to elicit three structured fields that later steps will reference. That is exactly the case [§3a](#3a-when-to-use-collect-steps-and-how-to-pair-them-with-output_schema) describes. Mark the step as a collect step and pair it with an `output_schema`:
 
@@ -382,7 +452,7 @@ Two things changed:
 
 The schema is minimal: three required strings with a `minLength` floor. Resist the urge to add `enum` lists of "valid roles" or regex patterns — over-specified schemas become friction, and an under-specified schema would let a blank string through. `minLength: 2` is the boring, correct answer.
 
-### 4e. Fleshing out the remaining steps and running the validator
+### 5e. Fleshing out the remaining steps and running the validator
 
 With `identify_role` in shape, the remaining four steps follow the same recipe: required fields first, then optional `step_description` and `directives` where they earn their place. Two patterns worth calling out:
 
@@ -423,7 +493,7 @@ That is the full authoring loop: edit, validate, read the error, fix, re-validat
 
 ---
 
-## 5. Common mistakes
+## 6. Common mistakes
 
 These are the seven mistakes we see most often in first-draft workflows. Each is paired with a concrete fix and a cross-reference to the relevant section of this guide. Skim the headers on your first read; return to the details when the validator or a reviewer flags a problem.
 
@@ -462,11 +532,11 @@ ERROR: Step 'X' directives must be a mapping
 
 ---
 
-## 6. Validation workflow
+## 7. Validation workflow
 
 The validator is the authoring-time quality gate. It is fast, offline, and terse on purpose — you run it after every edit, read the error if there is one, fix, and run it again. No code executes; only the YAML is parsed and checked against the schema.
 
-### 6a. The clean run
+### 7a. The clean run
 
 From the repository root, run the validator against your workflow file:
 
@@ -480,9 +550,9 @@ Expected output:
 Valid.
 ```
 
-Exit code `0`. That is the full success signal. If your shell prints a prompt immediately after `Valid.`, your workflow is schema-conformant and ready to load. The validator deliberately says nothing about quality — that is what the design principles in [§3](#3-design-principles) and the common mistakes in [§5](#5-common-mistakes) are for.
+Exit code `0`. That is the full success signal. If your shell prints a prompt immediately after `Valid.`, your workflow is schema-conformant and ready to load. The validator deliberately says nothing about quality — that is what the design principles in [§3](#3-design-principles) and the common mistakes in [§6](#6-common-mistakes) are for.
 
-### 6b. A deliberate error
+### 7b. A deliberate error
 
 To see what a failure looks like, remove a required field. Take your working `interview-prep.yaml` and delete (or comment out) the first step's `id` line, so the step looks like:
 
@@ -513,6 +583,6 @@ Exit code `1`. Notes on how the validator reports errors:
 
 Restore the `id` line and you are back to `Valid.` This is the full authoring loop: edit, validate, read the error, fix, re-validate. Most first-draft workflows pass on the second or third run; after a few workflows you will start writing files that pass on the first try.
 
-### 6c. From validation to deployment
+### 7c. From validation to deployment
 
-Passing the validator means your workflow is loadable — every downstream runtime (the local `megalos-server`, a domain server on Horizon, a composed Remix) runs the same validator on startup, so a file that validates locally validates on deploy. It does **not** mean the workflow produces good conversations; that is what the design principles in [§3](#3-design-principles), the common mistakes in [§5](#5-common-mistakes), and a human reviewer are for.
+Passing the validator means your workflow is loadable — every downstream runtime (the local `megalos-server`, a domain server on Horizon, a composed Remix) runs the same validator on startup, so a file that validates locally validates on deploy. It does **not** mean the workflow produces good conversations; that is what the design principles in [§3](#3-design-principles), the common mistakes in [§6](#6-common-mistakes), and a human reviewer are for.
