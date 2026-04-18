@@ -1,0 +1,38 @@
+# m004_s03_cascade_wrap_parent.yaml — M004/S03/T02 pair 6 (parent)
+#
+# Contract path: child runs to a precondition cascade (skipped_predecessor_reference).
+# On propagation, parent escalates in the same response and carries the canonical
+# called_workflow_error wrapper with the three-field shape. Retained child is
+# still resolvable via get_state (not auto-deleted).
+
+schema_version: "0.3"
+name: m004_s03_cascade_wrap_parent
+description: Parent whose child triggers a precondition cascade.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: p1
+    title: Prep
+    directive_template: Brief intro before delegating.
+    gates:
+      - intro written
+    anti_patterns:
+      - Skipping the intro
+
+  - id: p2
+    title: Delegate
+    directive_template: Hand off to the child and expect completion or escalation.
+    gates:
+      - handoff performed
+    anti_patterns:
+      - Skipping the handoff
+    call: m004_s03_cascade_wrap_child
+
+  - id: p3
+    title: Wrap up
+    directive_template: Only reached on successful propagation.
+    gates:
+      - wrap-up written
+    anti_patterns:
+      - Reaching wrap-up when escalated

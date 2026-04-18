@@ -1,0 +1,69 @@
+# m004_s03_branches_precondition_compose_parent.yaml — M004/S03/T02 pair 7 (parent)
+#
+# Contract path: `call` composes cleanly with `branches` upstream AND
+# `precondition` on the call-step itself.
+#   step_1 collects {path, go}; step_2 is a router with branches A/B; only
+#   branch A routes to the call-step, and the call-step carries a precondition
+#   on step_1.go == yes. Happy path = branch A + go=yes → child spawns.
+
+schema_version: "0.3"
+name: m004_s03_branches_precondition_compose_parent
+description: Parent composing call + branches + precondition on a single flow.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Collect routing inputs
+    directive_template: Ask the user for path (A or B) and go (yes or no).
+    gates:
+      - path captured
+      - go captured
+    anti_patterns:
+      - Guessing path or go
+    collect: true
+    output_schema:
+      type: object
+      required: [path, go]
+      properties:
+        path:
+          type: string
+          minLength: 1
+        go:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Route
+    directive_template: Pick a branch based on the user's chosen path.
+    gates:
+      - branch selected
+    anti_patterns:
+      - Selecting without asking
+    branches:
+      - next: p_call
+        condition: user chose path A
+      - next: p_end
+        condition: user chose path B
+    default_branch: p_end
+
+  - id: p_call
+    title: Delegate when go is yes
+    directive_template: Hand off to the child workflow.
+    gates:
+      - handoff performed
+    anti_patterns:
+      - Skipping the handoff
+    call: m004_s03_branches_precondition_compose_child
+    precondition:
+      when_equals:
+        ref: step_data.step_1.go
+        value: "yes"
+
+  - id: p_end
+    title: Wrap up
+    directive_template: Summarize the chosen path.
+    gates:
+      - summary written
+    anti_patterns:
+      - Ignoring the chosen path

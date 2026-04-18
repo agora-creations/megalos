@@ -1,0 +1,28 @@
+# m004_s03_revise_clean_rerun_child.yaml — M004/S03/T02 pair 5 (child)
+#
+# Straight two-step child. Final step content propagates into parent.step_data
+# at the call-step. Revise-the-parent path re-spawns a fresh child on the next
+# enter_sub_workflow, starting from step_1 (not resuming prior).
+
+schema_version: "0.3"
+name: m004_s03_revise_clean_rerun_child
+description: Straight two-step child used for revise-clean-rerun coverage.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Child step 1
+    directive_template: Do the first chunk of child work.
+    gates:
+      - first chunk done
+    anti_patterns:
+      - Skipping the first chunk
+
+  - id: step_2
+    title: Child step 2
+    directive_template: Do the second chunk of child work.
+    gates:
+      - second chunk done
+    anti_patterns:
+      - Skipping the second chunk

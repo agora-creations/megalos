@@ -1,0 +1,38 @@
+# m004_s03_revise_clean_rerun_parent.yaml — M004/S03/T02 pair 5 (parent)
+#
+# Contract path: after a child completes and the parent advances, the operator
+# revises the call-step. Revise must clear parent.step_data[call_step_id],
+# unlink the retained child (auto-delete), and reset current_step to the
+# call-step so a fresh enter_sub_workflow spawns a brand-new child.
+
+schema_version: "0.3"
+name: m004_s03_revise_clean_rerun_parent
+description: Parent call-step that can be revised for a clean rerun.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: p1
+    title: Prep
+    directive_template: Brief intro before delegating.
+    gates:
+      - intro written
+    anti_patterns:
+      - Skipping the intro
+
+  - id: p2
+    title: Delegate
+    directive_template: Hand off to the child workflow.
+    gates:
+      - handoff performed
+    anti_patterns:
+      - Skipping the handoff
+    call: m004_s03_revise_clean_rerun_child
+
+  - id: p3
+    title: Wrap up
+    directive_template: Summarize the child's output.
+    gates:
+      - summary written
+    anti_patterns:
+      - Ignoring child output

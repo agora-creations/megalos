@@ -1,0 +1,52 @@
+# m004_s03_cascade_wrap_child.yaml — M004/S03/T02 pair 6 (child)
+#
+# Reuses the canonical M003/S02 cascade-trigger shape:
+#   step_1 emits {flag}; step_2 is skipped when flag != run; step_3 references
+#   step_data.step_2 via when_present → _SkippedPredecessor raised on step_3.
+# Submit step_1 with {"flag": "no"} from the test to fire the cascade. The
+# S02 runtime wraps the child error into parent-side called_workflow_error.
+
+schema_version: "0.3"
+name: m004_s03_cascade_wrap_child
+description: Child that triggers a precondition cascade on a skipped predecessor.
+category: analysis_decision
+output_format: text
+
+steps:
+  - id: step_1
+    title: Emit flag
+    directive_template: Ask the user for a flag value.
+    gates:
+      - flag captured
+    anti_patterns:
+      - Guessing the flag
+    collect: true
+    output_schema:
+      type: object
+      required: [flag]
+      properties:
+        flag:
+          type: string
+          minLength: 2
+
+  - id: step_2
+    title: Conditional step
+    directive_template: Conditional work when flag is run.
+    gates:
+      - conditional work performed
+    anti_patterns:
+      - Running when flag is not run
+    precondition:
+      when_equals:
+        ref: step_data.step_1.flag
+        value: run
+
+  - id: step_3
+    title: Dependent on step_2
+    directive_template: Use step_2 output.
+    gates:
+      - step_2 output used
+    anti_patterns:
+      - Running without step_2
+    precondition:
+      when_present: step_data.step_2

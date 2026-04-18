@@ -1,4 +1,4 @@
-"""Tests for M004/S03/T01: sub-workflow contract paths 1-4.
+"""Tests for M004/S03: sub-workflow contract paths 1-7.
 
 Each test drives one parent+child YAML pair end-to-end through the live MCP
 tool surface (start_workflow → submit_step → enter_sub_workflow → submit_step
@@ -9,6 +9,9 @@ Pairs covered here:
   2. call_context_from (parent subtree extracted + seeded as child `context`)
   3. output_schema pass (child JSON matches parent schema; parent advances)
   4. output_schema fail (child misses required field; parent escalates + retains)
+  5. revise-the-call clean rerun (revise clears step_data, unlinks child, fresh spawn)
+  6. cascade wrap (child cascade → parent called_workflow_error wrapper + retained)
+  7. branches + precondition compose (call-step reachable via branches + gate)
 """
 
 import json
@@ -183,5 +186,167 @@ def test_m004_s03_output_schema_fail_escalates_and_retains_child():
         child_state = call_tool("get_state", {"session_id": child_sid})
         assert child_state.get("code") is None
         assert child_state["session_id"] == child_sid
+    finally:
+        _teardown_pair(parent_key, child_key)
+
+
+# --- Pair 5: revise-the-call clean rerun ------------------------------------
+
+
+def test_m004_s03_revise_call_step_unlinks_child_and_respawns_fresh():
+    parent_key, child_key = _load_pair(
+        "m004_s03_revise_clean_rerun_parent",
+        "m004_s03_revise_clean_rerun_child",
+    )
+    try:
+        r = call_tool("start_workflow", {"workflow_type": parent_key, "context": ""})
+        parent_sid = r["session_id"]
+
+        _drive(parent_sid, [("p1", "intro done")])
+
+        spawn = call_tool(
+            "enter_sub_workflow",
+            {"parent_session_id": parent_sid, "call_step_id": "p2"},
+        )
+        first_child_sid = spawn["session_id"]
+
+        # Drive child to completion; bridge advances parent past the call-step.
+        bridge = _drive(
+            first_child_sid,
+            [("step_1", "first chunk"), ("step_2", "final child artifact")],
+        )
+        assert bridge.get("code") is None, bridge
+        assert bridge.get("next_step", {}).get("id") == "p3"
+
+        parent = state.get_session(parent_sid)
+        assert parent["step_data"]["p2"] == "final child artifact"
+        assert parent.get("called_session") is None
+        # Child auto-deleted after successful propagation.
+        r = call_tool("get_state", {"session_id": first_child_sid})
+        assert r.get("code") == "session_not_found"
+
+        # Revise the call-step: clears step_data[p2], resets current_step to p2.
+        rv = call_tool(
+            "revise_step", {"session_id": parent_sid, "step_id": "p2"}
+        )
+        assert rv.get("code") is None, rv
+        parent = state.get_session(parent_sid)
+        assert "p2" not in parent["step_data"]
+        assert parent["current_step"] == "p2"
+        assert parent.get("called_session") is None
+
+        # Re-enter: fresh child session, starting at step_1.
+        spawn2 = call_tool(
+            "enter_sub_workflow",
+            {"parent_session_id": parent_sid, "call_step_id": "p2"},
+        )
+        second_child_sid = spawn2["session_id"]
+        assert second_child_sid != first_child_sid
+        second_child = state.get_session(second_child_sid)
+        assert second_child["current_step"] == "step_1"
+        assert second_child["step_data"] == {}
+    finally:
+        _teardown_pair(parent_key, child_key)
+
+
+# --- Pair 6: cascade wrap ---------------------------------------------------
+
+
+def test_m004_s03_child_cascade_wraps_parent_and_retains_child():
+    parent_key, child_key = _load_pair(
+        "m004_s03_cascade_wrap_parent",
+        "m004_s03_cascade_wrap_child",
+    )
+    try:
+        r = call_tool("start_workflow", {"workflow_type": parent_key, "context": ""})
+        parent_sid = r["session_id"]
+
+        _drive(parent_sid, [("p1", "intro done")])
+
+        spawn = call_tool(
+            "enter_sub_workflow",
+            {"parent_session_id": parent_sid, "call_step_id": "p2"},
+        )
+        child_sid = spawn["session_id"]
+
+        # flag=no → child step_2 skipped → child step_3 cascade-references step_2.
+        bridge = call_tool(
+            "submit_step",
+            {"session_id": child_sid, "step_id": "step_1", "content": '{"flag": "no"}'},
+        )
+
+        # Parent escalated in the same response.
+        assert bridge.get("code") == "session_escalated"
+        # Canonical cascade marker from _SkippedPredecessor.
+        assert (
+            bridge["called_workflow_error"]["child_error"]["code"]
+            == "skipped_predecessor_reference"
+        )
+        # Three-field wrapper contract.
+        assert set(bridge["called_workflow_error"].keys()) == {
+            "child_session_id",
+            "child_workflow_type",
+            "child_error",
+        }
+        assert bridge["called_workflow_error"]["child_session_id"] == child_sid
+        assert bridge["called_workflow_error"]["child_workflow_type"] == child_key
+
+        parent = state.get_session(parent_sid)
+        assert parent["escalation"] is not None
+        assert parent["escalation"]["guardrail_id"] == "called_workflow_failed"
+
+        # Child retained: still resolvable via get_state.
+        child_state = call_tool("get_state", {"session_id": child_sid})
+        assert child_state.get("code") is None
+        assert child_state["session_id"] == child_sid
+    finally:
+        _teardown_pair(parent_key, child_key)
+
+
+# --- Pair 7: branches + precondition compose --------------------------------
+
+
+def test_m004_s03_branches_precondition_compose_spawns_child_on_happy_path():
+    parent_key, child_key = _load_pair(
+        "m004_s03_branches_precondition_compose_parent",
+        "m004_s03_branches_precondition_compose_child",
+    )
+    try:
+        r = call_tool("start_workflow", {"workflow_type": parent_key, "context": ""})
+        parent_sid = r["session_id"]
+
+        # step_1: pick path=A AND go=yes so branches route to p_call AND
+        # p_call's precondition is satisfied.
+        payload = json.dumps({"path": "A", "go": "yes"})
+        last = _drive(parent_sid, [("step_1", payload)])
+        # step_2 is a router; submit with explicit branch selection.
+        last = call_tool(
+            "submit_step",
+            {
+                "session_id": parent_sid,
+                "step_id": "step_2",
+                "content": "routing to A",
+                "branch": "p_call",
+            },
+        )
+        assert last.get("code") is None, last
+        assert last.get("next_step", {}).get("id") == "p_call"
+
+        # Enter sub-workflow at p_call: composes with upstream branches +
+        # on-call precondition cleanly.
+        spawn = call_tool(
+            "enter_sub_workflow",
+            {"parent_session_id": parent_sid, "call_step_id": "p_call"},
+        )
+        child_sid = spawn["session_id"]
+        assert state.get_session(child_sid)["current_step"] == "c1"
+
+        # Drive child to completion → parent advances to p_end.
+        bridge = _drive(child_sid, [("c1", "child done")])
+        assert bridge.get("code") is None, bridge
+        assert bridge.get("next_step", {}).get("id") == "p_end"
+
+        parent = state.get_session(parent_sid)
+        assert parent["step_data"]["p_call"] == "child done"
     finally:
         _teardown_pair(parent_key, child_key)
