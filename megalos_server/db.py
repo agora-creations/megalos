@@ -26,10 +26,28 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- called_session NULL = no child in flight (parent's common case).
     -- parent_session_id NULL = this is a root session (the overwhelming common case).
     -- Both are load-bearing defaults — do NOT add NOT NULL constraints here.
+    -- Both columns are also the legacy on-write cache reconciled against session_stack;
+    -- reads for runtime logic MUST go through state.py's stack accessors, not these columns.
     called_session TEXT,
     parent_session_id TEXT
 )
 """
+
+_SESSION_STACK_SCHEMA = """
+CREATE TABLE IF NOT EXISTS session_stack (
+    session_id TEXT PRIMARY KEY,
+    root_session_id TEXT NOT NULL,
+    depth INTEGER NOT NULL,
+    frame_type TEXT NOT NULL CHECK (frame_type IN ('call', 'digression')),
+    call_step_id TEXT,
+    created_at TEXT NOT NULL
+)
+"""
+
+_SESSION_STACK_INDEX = (
+    "CREATE INDEX IF NOT EXISTS idx_session_stack_root_depth "
+    "ON session_stack (root_session_id, depth)"
+)
 
 _tls = threading.local()
 
@@ -57,6 +75,8 @@ def _get_conn() -> sqlite3.Connection:
     for col_name, col_type in (("called_session", "TEXT"), ("parent_session_id", "TEXT")):
         if col_name not in existing_cols:
             conn.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_type}")
+    conn.execute(_SESSION_STACK_SCHEMA)
+    conn.execute(_SESSION_STACK_INDEX)
     _tls.conn = conn
     return conn
 
@@ -65,6 +85,8 @@ def init_schema() -> None:
     """Create the sessions table if absent. Idempotent."""
     conn = _get_conn()
     conn.execute(_SCHEMA)
+    conn.execute(_SESSION_STACK_SCHEMA)
+    conn.execute(_SESSION_STACK_INDEX)
 
 
 @contextlib.contextmanager

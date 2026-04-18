@@ -73,6 +73,8 @@ def create_session(
 
     parent_session_id: when set, marks this session as a child of the given
     parent. Stored in parent_session_id column; never mutated after create.
+    When set, a session_stack frame is pushed in the same transaction so the
+    stack and the legacy column agree on commit.
     """
     sid = uuid.uuid4().hex[:12]
     now = _now_iso()
@@ -96,6 +98,11 @@ def create_session(
                     "DELETE FROM sessions WHERE session_id = ?",
                     [(eid,) for eid in evicted_ids],
                 )
+                # Evicted sessions may have had stack frames; drop those too.
+                conn.executemany(
+                    "DELETE FROM session_stack WHERE session_id = ?",
+                    [(eid,) for eid in evicted_ids],
+                )
         conn.execute(
             "INSERT INTO sessions (session_id, workflow_type, current_step, "
             "step_data, retry_counts, step_visit_counts, escalation, "
@@ -104,6 +111,24 @@ def create_session(
             "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, ?)",
             (sid, workflow_type, current_step, empty, empty, empty, empty, now, now, parent_session_id),
         )
+        if parent_session_id is not None:
+            # Locate the parent's root + depth so this child lands one level deeper.
+            # Parent may itself be a framed child (multi-level stack), or a root.
+            parent_row = conn.execute(
+                "SELECT root_session_id, depth FROM session_stack WHERE session_id = ?",
+                (parent_session_id,),
+            ).fetchone()
+            if parent_row is None:
+                root_sid = parent_session_id
+                child_depth = 1
+            else:
+                root_sid = parent_row[0]
+                child_depth = parent_row[1] + 1
+            conn.execute(
+                "INSERT INTO session_stack (session_id, root_session_id, depth, "
+                "frame_type, call_step_id, created_at) VALUES (?, ?, ?, 'call', NULL, ?)",
+                (sid, root_sid, child_depth, now),
+            )
     # Log AFTER commit — if INSERT rolled back, DELETE rolled back too; don't lie.
     if evicted_ids:
         _log_eviction(reason="cap_exceeded", ids=evicted_ids, session_cap=cap)
@@ -178,6 +203,7 @@ def clear_sessions() -> None:
     """Remove all sessions. Used by tests."""
     with db.transaction() as conn:
         conn.execute("DELETE FROM sessions")
+        conn.execute("DELETE FROM session_stack")
 
 
 def invalidate_steps_after(session_id: str, step_ids: list[str]) -> None:
@@ -271,9 +297,22 @@ def set_escalation(session_id: str, guardrail_id: str, message: str) -> None:
             raise KeyError(f"Session not found: {session_id}")
 
 
-def set_called_session(parent_session_id: str, child_session_id: str | None) -> None:
+def set_called_session(
+    parent_session_id: str,
+    child_session_id: str | None,
+    call_step_id: str | None = None,
+) -> None:
     """Set or clear the parent's called_session link. Pass None to clear.
-    Raises KeyError if parent not found."""
+
+    Keeps the legacy called_session column and the session_stack table in sync
+    in a single transaction. When linking a child, stamps the child frame's
+    call_step_id (the frame row itself was pushed at child create time).
+    When clearing (child_session_id is None), removes the topmost frame above
+    parent_session_id so the stack stops reporting the child as in-flight —
+    mirroring what delete_session does when the child is hard-terminated.
+
+    Raises KeyError if parent not found.
+    """
     with db.transaction() as conn:
         cur = conn.execute(
             "UPDATE sessions SET called_session = ?, updated_at = ? WHERE session_id = ?",
@@ -281,6 +320,161 @@ def set_called_session(parent_session_id: str, child_session_id: str | None) -> 
         )
         if cur.rowcount == 0:
             raise KeyError(f"Session not found: {parent_session_id}")
+        if child_session_id is not None and call_step_id is not None:
+            conn.execute(
+                "UPDATE session_stack SET call_step_id = ? WHERE session_id = ?",
+                (call_step_id, child_session_id),
+            )
+        if child_session_id is None:
+            # Find the frame sitting above parent_session_id (in the same root chain)
+            # and remove it. Parent may be a root (no frame row of its own) or
+            # itself a framed child in a deeper stack.
+            parent_frame = conn.execute(
+                "SELECT root_session_id, depth FROM session_stack WHERE session_id = ?",
+                (parent_session_id,),
+            ).fetchone()
+            if parent_frame is None:
+                root_sid = parent_session_id
+                next_depth = 1
+            else:
+                root_sid = parent_frame[0]
+                next_depth = parent_frame[1] + 1
+            conn.execute(
+                "DELETE FROM session_stack WHERE root_session_id = ? AND depth = ?",
+                (root_sid, next_depth),
+            )
+
+
+# --- Stack accessors -----------------------------------------------------
+#
+# session_stack is the runtime source of truth for parent/child relationships.
+# Legacy columns (sessions.parent_session_id, sessions.called_session) stay
+# populated on writes as a cache for migration compat and external queries,
+# but runtime reads route through these functions exclusively.
+
+
+def push_frame(
+    root_session_id: str,
+    session_id: str,
+    frame_type: str,
+    call_step_id: str | None = None,
+) -> int:
+    """Push a frame above root_session_id. Returns the new depth.
+
+    Caller is responsible for computing the correct root_session_id
+    (a root_session_id must refer to the top-level session; push_frame
+    computes depth as one greater than the deepest existing frame for that
+    root, or 1 if the stack is empty)."""
+    with db.transaction() as conn:
+        row = conn.execute(
+            "SELECT COALESCE(MAX(depth), 0) FROM session_stack WHERE root_session_id = ?",
+            (root_session_id,),
+        ).fetchone()
+        depth = int(row[0]) + 1
+        conn.execute(
+            "INSERT INTO session_stack (session_id, root_session_id, depth, "
+            "frame_type, call_step_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (session_id, root_session_id, depth, frame_type, call_step_id, _now_iso()),
+        )
+    return depth
+
+
+def pop_frame(session_id: str) -> dict | None:
+    """Remove the frame whose session_id matches. Returns the removed row dict
+    (session_id, root_session_id, depth, frame_type, call_step_id, created_at)
+    or None if no frame existed for that session."""
+    with db.transaction() as conn:
+        row = conn.execute(
+            "SELECT session_id, root_session_id, depth, frame_type, call_step_id, created_at "
+            "FROM session_stack WHERE session_id = ?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        conn.execute("DELETE FROM session_stack WHERE session_id = ?", (session_id,))
+    return _frame_row_to_dict(row)
+
+
+def peek_frame(root_session_id: str) -> dict | None:
+    """Return the topmost (max depth) frame for the given root, or None if empty."""
+    conn = db._get_conn()
+    row = conn.execute(
+        "SELECT session_id, root_session_id, depth, frame_type, call_step_id, created_at "
+        "FROM session_stack WHERE root_session_id = ? ORDER BY depth DESC LIMIT 1",
+        (root_session_id,),
+    ).fetchone()
+    return _frame_row_to_dict(row) if row else None
+
+
+def stack_depth(root_session_id: str) -> int:
+    """Return the number of frames sitting above root_session_id (0 if none)."""
+    conn = db._get_conn()
+    row = conn.execute(
+        "SELECT COUNT(*) FROM session_stack WHERE root_session_id = ?",
+        (root_session_id,),
+    ).fetchone()
+    return int(row[0])
+
+
+def top_frame_for(session_id: str) -> dict | None:
+    """Return the frame sitting one level above session_id, or None if session_id
+    is itself at the top of its chain (or has no frames rooted/framed at it).
+
+    Works whether session_id is a root (no frame row of its own) or a framed
+    child. For a root, 'above it' is the frame at depth 1 in its chain.
+    For a framed child at depth N, 'above it' is the frame at depth N+1 in
+    the same root chain.
+    """
+    conn = db._get_conn()
+    own = conn.execute(
+        "SELECT root_session_id, depth FROM session_stack WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()
+    if own is None:
+        # Treat session_id as a root; look for depth=1 in its chain.
+        root_sid = session_id
+        next_depth = 1
+    else:
+        root_sid = own[0]
+        next_depth = own[1] + 1
+    row = conn.execute(
+        "SELECT session_id, root_session_id, depth, frame_type, call_step_id, created_at "
+        "FROM session_stack WHERE root_session_id = ? AND depth = ?",
+        (root_sid, next_depth),
+    ).fetchone()
+    return _frame_row_to_dict(row) if row else None
+
+
+def parent_of(session_id: str) -> str | None:
+    """Return the session_id of the frame (or root) immediately below session_id.
+    Returns None if session_id is a root (no frame row).
+    """
+    conn = db._get_conn()
+    own = conn.execute(
+        "SELECT root_session_id, depth FROM session_stack WHERE session_id = ?",
+        (session_id,),
+    ).fetchone()
+    if own is None:
+        return None
+    root_sid, depth = own[0], int(own[1])
+    if depth == 1:
+        return root_sid
+    row = conn.execute(
+        "SELECT session_id FROM session_stack WHERE root_session_id = ? AND depth = ?",
+        (root_sid, depth - 1),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def _frame_row_to_dict(row: tuple) -> dict:
+    return {
+        "session_id": row[0],
+        "root_session_id": row[1],
+        "depth": row[2],
+        "frame_type": row[3],
+        "call_step_id": row[4],
+        "created_at": row[5],
+    }
 
 
 def count_active() -> int:
@@ -311,6 +505,10 @@ def expire_sessions(ttl_hours: int = 24) -> list[str]:
         if expired:
             conn.executemany(
                 "DELETE FROM sessions WHERE session_id = ?",
+                [(sid,) for sid in expired],
+            )
+            conn.executemany(
+                "DELETE FROM session_stack WHERE session_id = ?",
                 [(sid,) for sid in expired],
             )
     if expired:
@@ -348,7 +546,10 @@ def get_artifacts(session_id: str, step_id: str) -> dict:
 
 
 def delete_session(session_id: str) -> dict:
-    """Remove session and return its data. Raises KeyError if not found."""
+    """Remove session and return its data. Raises KeyError if not found.
+
+    Also removes any session_stack frame for the deleted session (child
+    termination implies the frame that represented it is gone too)."""
     with db.transaction() as conn:
         row = conn.execute(
             f"SELECT {_SELECT_COLS} FROM sessions WHERE session_id = ?",
@@ -357,6 +558,7 @@ def delete_session(session_id: str) -> dict:
         if row is None:
             raise KeyError(f"Session not found: {session_id}")
         conn.execute("DELETE FROM sessions WHERE session_id = ?", (session_id,))
+        conn.execute("DELETE FROM session_stack WHERE session_id = ?", (session_id,))
     return _row_to_session(row)
 
 
