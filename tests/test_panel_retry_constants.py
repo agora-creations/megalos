@@ -8,8 +8,8 @@ not be softened into a range check.
 from megalos_panel import retry
 
 
-def test_rate_limit_attempts_is_three():
-    assert retry.RATE_LIMIT_ATTEMPTS == 3
+def test_rate_limit_attempts_is_five():
+    assert retry.RATE_LIMIT_ATTEMPTS == 5
 
 
 def test_transient_attempts_is_five():

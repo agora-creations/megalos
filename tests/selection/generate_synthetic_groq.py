@@ -51,11 +51,43 @@ import yaml
 
 from megalos_panel import PanelRequest, RecordWriter, panel_query
 from tests.selection.generate_synthetic import (
-    PROMPT_TEMPLATE_VERSION,
     SYNTHETIC_GENERATOR_PROMPTS,
     VALID_BANDS,
     _expand_bands,
 )
+
+# Fixtures authored by this module augment T04a's band 2 prompt via
+# BAND_PROMPT_OVERRIDES (see below), so a distinct version tag carries
+# forward into sidecars and pair metadata. v2 = Groq-only, single-model,
+# band 2 tightened to suppress self-referential "mid-closeness" output.
+PROMPT_TEMPLATE_VERSION = "generator-v2-groq"
+
+# Per-band prompt overrides. Present bands override T04a's imported
+# prompt text; absent bands fall through to the imported prompt. Band 2
+# was tightened after the synthetic_v1 run showed llama-3.3-70b-versatile
+# producing near-identical "mid-closeness" paraphrase pairs (band 3 in
+# judge-space) rather than distinct same-category workflows.
+_BAND_2_V2_PROMPT = (
+    "Propose a pair of workflow descriptions for closeness Band 2 (mid "
+    "closeness). Pick two DIFFERENT concrete workflows (X and Y) that "
+    "happen to share a broad category — both writing tasks, both analysis "
+    "tasks, both coding tasks, etc. Describe each by its specific "
+    "operations, inputs, and outputs. Do NOT use the words 'mid-closeness', "
+    "'mid-level', 'mid-range', 'moderate', 'balance', or 'closeness' "
+    "anywhere in the descriptions. The two workflows should be "
+    "distinguishable by what they actually produce or how they operate, "
+    "not by abstract qualifiers. Example category: writing. "
+    "Example X: 'Draft a 1500-word policy essay with citations.' "
+    "Example Y: 'Draft a 700-word blog post on the same policy for "
+    "general readers.' Produce description_A (for X) and description_B "
+    "(for Y), each one short paragraph."
+)
+
+BAND_PROMPT_OVERRIDES: dict[int, str] = {2: _BAND_2_V2_PROMPT}
+
+
+def _band_prompt(band: int) -> str:
+    return BAND_PROMPT_OVERRIDES.get(band, SYNTHETIC_GENERATOR_PROMPTS[band])
 
 # Default authoring model per D026. The ``groq/`` prefix routes through
 # the GroqAdapter registered in ``megalos_panel.adapters``. Overridable
@@ -130,7 +162,7 @@ def _plan_batches(
                     batch_index=global_batch_index,
                     pairs=size,
                     authoring_model=authoring_model,
-                    authoring_prompt=SYNTHETIC_GENERATOR_PROMPTS[band],
+                    authoring_prompt=_band_prompt(band),
                 )
             )
             remaining -= size
@@ -320,9 +352,7 @@ def _run_live(
     with RecordWriter(run_record_dir) as writer:
         panel_record_path = writer.path
         for batch in batches:
-            augmented_prompt = (
-                SYNTHETIC_GENERATOR_PROMPTS[batch.band] + JSON_OUTPUT_INSTRUCTION
-            )
+            augmented_prompt = _band_prompt(batch.band) + JSON_OUTPUT_INSTRUCTION
             requests = [
                 PanelRequest(prompt=augmented_prompt, model=batch.authoring_model)
                 for _ in range(batch.pairs)

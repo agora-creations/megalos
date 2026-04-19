@@ -17,14 +17,15 @@ import pytest  # type: ignore[import-not-found]
 from megalos_panel import panel_query
 from tests.selection import generate_synthetic_groq
 from tests.selection.generate_synthetic import (
-    PROMPT_TEMPLATE_VERSION,
     SYNTHETIC_GENERATOR_PROMPTS,
 )
 from tests.selection.generate_synthetic_groq import (
+    BAND_PROMPT_OVERRIDES,
     DEFAULT_AUTHORING_MODEL,
     JSON_OUTPUT_INSTRUCTION,
     PAIRS_PER_BATCH,
     PARSE_FAILURE,
+    PROMPT_TEMPLATE_VERSION,
     SCOPE_ERROR,
     _groq_model_id_at_runtime,
     _write_fixture_yaml,
@@ -131,11 +132,12 @@ def test_band1_prompt_contains_multi_marker_directive(capsys):
     assert "multiple markers" in out
 
 
-def test_band2_prompt_contains_few_marker_directive(capsys):
+def test_band2_prompt_uses_v2_override(capsys):
     main(["--dry-run", "--band", "2", "--n-per-band", "5"])
     out = capsys.readouterr().out
     assert "Band 2" in out
-    assert "few markers distinguish" in out
+    assert "DIFFERENT concrete workflows" in out
+    assert "mid-closeness" in out  # appears in the forbidden-words list
 
 
 def test_band3_prompt_contains_one_minimal_marker_directive(capsys):
@@ -149,6 +151,12 @@ def test_prompts_imported_cover_every_band():
     # The module reuses SYNTHETIC_GENERATOR_PROMPTS by import, so this
     # pins the contract at the shared surface.
     assert set(SYNTHETIC_GENERATOR_PROMPTS.keys()) == {1, 2, 3}
+
+
+def test_band_prompt_overrides_only_applies_to_band_2():
+    # Band 2 is overridden; bands 1 and 3 fall through to T04a's imports.
+    assert set(BAND_PROMPT_OVERRIDES.keys()) == {2}
+    assert BAND_PROMPT_OVERRIDES[2] != SYNTHETIC_GENERATOR_PROMPTS[2]
 
 
 # --- error paths ---------------------------------------------------------

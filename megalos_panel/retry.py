@@ -1,8 +1,11 @@
 """Retry budget constants and helper for panel provider calls.
 
-Constants are the contract: 3 attempts for rate-limit (429) errors,
+Constants are the contract: 5 attempts for rate-limit (429) errors,
 5 attempts for transient network errors (timeout, connection reset, 5xx),
-exponential backoff capped at 30 seconds with a 1-second base.
+exponential backoff capped at 30 seconds with a 1-second base. Rate-limit
+budget was widened from 3 to 5 after Groq free-tier 30-RPM responses
+exhausted a 3-attempt budget mid-run — per D017, the retry budget is the
+expected amendment surface as panel composition changes.
 
 retry_with_backoff is the composition helper. It maintains two independent
 per-exception-type budgets in a single call — a provider run can consume
@@ -23,7 +26,7 @@ from typing import Callable, TypeVar
 
 from .errors import PanelProviderError, RateLimitError, TransientError
 
-RATE_LIMIT_ATTEMPTS = 3
+RATE_LIMIT_ATTEMPTS = 5
 TRANSIENT_ATTEMPTS = 5
 BACKOFF_CAP_SECONDS = 30
 BACKOFF_BASE_SECONDS = 1
