@@ -33,6 +33,7 @@ from megalos_panel.types import PanelRequest
 def test_adapters_registry_has_expected_prefixes():
     assert "claude-" in ADAPTERS
     assert "gpt-" in ADAPTERS
+    assert "groq/" in ADAPTERS
 
 
 def test_dispatch_claude_prefix():
@@ -47,6 +48,13 @@ def test_dispatch_gpt_prefix():
 
     assert dispatch("gpt-4o") is OpenAIAdapter
     assert dispatch("gpt-5") is OpenAIAdapter
+
+
+def test_dispatch_groq_prefix():
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    assert dispatch("groq/llama-3.3-70b-versatile") is GroqAdapter
+    assert dispatch("groq/openai/gpt-oss-120b") is GroqAdapter
 
 
 def test_dispatch_unknown_raises():
@@ -162,6 +170,34 @@ def patch_openai(monkeypatch):  # type: ignore[no-untyped-def]
         return fake_client
 
     _install.openai = openai  # type: ignore[attr-defined]
+    return _install
+
+
+@pytest.fixture
+def patch_groq(monkeypatch):  # type: ignore[no-untyped-def]
+    """Monkeypatch openai.OpenAI (used by GroqAdapter) to a fake client.
+
+    Captures the kwargs passed to the OpenAI constructor so tests can assert
+    the Groq base_url is supplied.
+    """
+    import openai
+
+    import megalos_panel.adapters.groq as groq_mod
+
+    captured: dict[str, object] = {}
+
+    def _install(behavior):  # type: ignore[no-untyped-def]
+        fake_client = _FakeOpenAIClient(behavior)
+
+        def _factory(**kwargs):  # type: ignore[no-untyped-def]
+            captured.update(kwargs)
+            return fake_client
+
+        monkeypatch.setattr(groq_mod.openai, "OpenAI", _factory)
+        return fake_client
+
+    _install.openai = openai  # type: ignore[attr-defined]
+    _install.captured = captured  # type: ignore[attr-defined]
     return _install
 
 
@@ -379,6 +415,125 @@ def test_openai_adapter_missing_api_key_raises(monkeypatch):  # type: ignore[no-
 
     with pytest.raises(ValueError, match="OPENAI_API_KEY"):
         OpenAIAdapter()
+
+
+# --- GroqAdapter ------------------------------------------------------------
+
+
+def test_groq_adapter_returns_assistant_text(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    fake_client = patch_groq(lambda kwargs: _FakeOpenAIResponse("groq answer"))
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    adapter = GroqAdapter()
+    result = adapter.invoke(
+        PanelRequest(prompt="hello", model="groq/llama-3.3-70b-versatile")
+    )
+    assert result == "groq answer"
+    assert len(fake_client.chat.completions.calls) == 1
+    call = fake_client.chat.completions.calls[0]
+    # groq/ prefix stripped; remainder passed unchanged.
+    assert call["model"] == "llama-3.3-70b-versatile"
+    assert call["messages"] == [{"role": "user", "content": "hello"}]
+    # Client was constructed against Groq's OpenAI-compatible endpoint.
+    assert patch_groq.captured["base_url"] == "https://api.groq.com/openai/v1"  # type: ignore[attr-defined]
+
+
+def test_groq_adapter_strips_only_groq_prefix(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    """model='groq/openai/gpt-oss-120b' must reach the API as 'openai/gpt-oss-120b'."""
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    fake_client = patch_groq(lambda kwargs: _FakeOpenAIResponse("ok"))
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/openai/gpt-oss-120b"))
+    call = fake_client.chat.completions.calls[0]
+    assert call["model"] == "openai/gpt-oss-120b"
+
+
+def test_groq_adapter_classifies_rate_limit(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    def _boom(_kwargs):  # type: ignore[no-untyped-def]
+        import openai as o
+        raise o.RateLimitError("rate limited", response=_httpx_response(429), body=None)
+
+    patch_groq(_boom)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(RateLimitError):
+        GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/llama-3.3-70b-versatile"))
+
+
+def test_groq_adapter_classifies_timeout(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    def _boom(_kwargs):  # type: ignore[no-untyped-def]
+        import openai as o
+        raise o.APITimeoutError(_httpx_request())
+
+    patch_groq(_boom)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(TransientError):
+        GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/llama-3.3-70b-versatile"))
+
+
+def test_groq_adapter_classifies_connection_error(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    def _boom(_kwargs):  # type: ignore[no-untyped-def]
+        import openai as o
+        raise o.APIConnectionError(request=_httpx_request())
+
+    patch_groq(_boom)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(TransientError):
+        GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/llama-3.3-70b-versatile"))
+
+
+def test_groq_adapter_classifies_5xx_status(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    def _boom(_kwargs):  # type: ignore[no-untyped-def]
+        import openai as o
+        raise o.APIStatusError("boom", response=_httpx_response(502), body=None)
+
+    patch_groq(_boom)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(TransientError):
+        GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/llama-3.3-70b-versatile"))
+
+
+def test_groq_adapter_propagates_4xx_status(patch_groq, monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    import openai as o
+
+    def _boom(_kwargs):  # type: ignore[no-untyped-def]
+        raise o.APIStatusError("bad request", response=_httpx_response(400), body=None)
+
+    patch_groq(_boom)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(o.APIStatusError):
+        GroqAdapter().invoke(PanelRequest(prompt="hi", model="groq/llama-3.3-70b-versatile"))
+
+
+def test_groq_adapter_missing_api_key_raises(monkeypatch):  # type: ignore[no-untyped-def]
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+
+    from megalos_panel.adapters.groq import GroqAdapter
+
+    with pytest.raises(ValueError, match="GROQ_API_KEY"):
+        GroqAdapter()
 
 
 # --- Error taxonomy exports -------------------------------------------------

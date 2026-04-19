@@ -39,9 +39,37 @@ Each adapter reads its key from a conventional environment variable:
 
 - `ANTHROPIC_API_KEY` — Claude adapter
 - `OPENAI_API_KEY` — OpenAI adapter
+- `GROQ_API_KEY` — Groq adapter (routes via Groq's OpenAI-compatible
+  endpoint at `https://api.groq.com/openai/v1` — no separate SDK)
 
 Panel calls that find no key raise the adapter's native configuration error
 eagerly; retry logic does not cover configuration failures.
+
+### Model-prefix routing
+
+`dispatch()` picks an adapter by longest-prefix match on `PanelRequest.model`:
+
+| Prefix    | Adapter         | Example model string                 |
+|-----------|-----------------|--------------------------------------|
+| `claude-` | `ClaudeAdapter` | `claude-opus-4-7`                    |
+| `gpt-`    | `OpenAIAdapter` | `gpt-4o`                             |
+| `groq/`   | `GroqAdapter`   | `groq/llama-3.3-70b-versatile`       |
+
+The Groq adapter strips the `groq/` prefix and passes the remainder to the
+Groq API unchanged, so three-segment identifiers like
+`groq/openai/gpt-oss-120b` resolve to a Groq API call with
+`model="openai/gpt-oss-120b"`. No new pip dependency is required — Groq
+reuses the `openai` SDK already declared in the `[panel]` extra.
+
+```python
+from megalos_panel import panel_query
+from megalos_panel.types import PanelRequest
+
+results = panel_query([
+    PanelRequest(prompt="…", model="groq/llama-3.3-70b-versatile"),
+    PanelRequest(prompt="…", model="groq/openai/gpt-oss-120b"),
+])
+```
 
 ## Public API
 

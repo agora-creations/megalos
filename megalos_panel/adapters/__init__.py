@@ -27,6 +27,7 @@ class Adapter(Protocol):
 ADAPTERS: dict[str, str] = {
     "claude-": "megalos_panel.adapters.claude:ClaudeAdapter",
     "gpt-": "megalos_panel.adapters.openai:OpenAIAdapter",
+    "groq/": "megalos_panel.adapters.groq:GroqAdapter",
 }
 
 
