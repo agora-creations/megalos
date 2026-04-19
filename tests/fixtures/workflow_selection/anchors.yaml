@@ -1,0 +1,27 @@
+# Calibration anchor set for workflow-selection measurement.
+#
+# Hand-authored ground-truth instrument. Do NOT regenerate via LLM.
+# The judge calibrates its closeness axis against these scores; they
+# are the fixed points of the measurement, not data under test.
+#
+# Expand to 5-7 entries only if sensitivity analysis reveals calibration
+# instability (see docs/selection_authoring_protocol.md §4).
+
+anchors:
+  - pair_id: anchor_low_001
+    description_A: "Produce a long-form analytical essay on a chosen topic, developing an argument through successive paragraphs."
+    description_B: "Write code to implement a new feature from a design specification, emitting source files and accompanying tests."
+    operator_assigned_closeness: 0.2
+    rationale: "Cross-category pair (writing vs. professional) with multiple distinguishing markers — essay/argument/paragraphs on one side, code/feature/tests on the other; almost no shared referents."
+
+  - pair_id: anchor_mid_001
+    description_A: "Research a topic through structured source review and produce a written report summarizing the findings."
+    description_B: "Analyze a pending decision against its tradeoffs and produce a reasoned recommendation for a decision-maker."
+    operator_assigned_closeness: 0.5
+    rationale: "Same category (analysis) with overlapping purposes (structured inquiry into a topic, written output), distinguished primarily by output shape — report vs. recommendation — and by source-review vs. tradeoff-analysis framing."
+
+  - pair_id: anchor_high_001
+    description_A: "Draft a short blog post on a chosen topic aimed at a general audience."
+    description_B: "Draft a short blog post on a chosen topic aimed at a technical audience."
+    operator_assigned_closeness: 0.75
+    rationale: "Near-identical descriptions differing in a single marker — audience specification (general vs. technical) — with everything else shared; the selection hinges on whether the selector treats audience as a distinguishing referent."
