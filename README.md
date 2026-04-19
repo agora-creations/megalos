@@ -16,10 +16,10 @@
   - [Session state](#session-state)
 - [MCP servers](#mcp-servers)
 - [Authoring a new domain repo](#authoring-a-new-domain-repo)
+- [Cross-model panel (optional extra)](#cross-model-panel-optional-extra)
 - [simplicity-guard](#simplicity-guard)
 - [mikrós — future agent-skills library](#mikrós--future-agent-skills-library)
 - [The iron rule](#the-iron-rule)
-- [Optional plugins](#optional-plugins)
 - [License](#license)
 - [Acknowledgements](#acknowledgements)
 
@@ -52,7 +52,7 @@ python -m megalos_server.validate path/to/workflow.yaml
 
 ## The MCP server runtime
 
-Distribution: `megalos-server`. Import: `megalos_server`. Two runtime dependencies: `fastmcp` and `pyyaml` (plus `jsonschema` for output validation).
+Distribution: `megalos-server`. Import: `megalos_server`. Two runtime dependencies: `fastmcp` and `pyyaml` (plus `jsonschema` for output validation). No LLM SDKs in the core — the server never calls a model.
 
 ### Public API
 
@@ -74,21 +74,14 @@ dependencies = [
 
 Local development override: `pip install -e ../megalos`.
 
-## MCP servers
-
-Workflows are grouped by **category**, and each category lives in its own MCP server (a thin wrapper around `megalos-server` that exposes the workflows for that category). Mix and match — connect to one server, several, or all, depending on the kinds of work you want structured:
-
-| Server | Category | Workflows | Remote |
-|--------|----------|-----------|--------|
-| `megalos-writing` | writing & communication | essay, blog | [github.com/agora-creations/megalos-writing](https://github.com/agora-creations/megalos-writing) |
-| `megalos-analysis` | analysis & decision | research, decision | [github.com/agora-creations/megalos-analysis](https://github.com/agora-creations/megalos-analysis) |
-| `megalos-professional` | professional | coding | [github.com/agora-creations/megalos-professional](https://github.com/agora-creations/megalos-professional) |
-
-This repo itself bundles only `megalos_server/workflows/example.yaml` as a reference workflow plus `tests/fixtures/workflows/` (one canonical 3-step framework fixture plus seven demo fixtures). Production workflows live exclusively in their category-specific repos.
-
 ### MCP tools
 
-`list_workflows`, `start_workflow`, `get_state`, `get_guidelines`, `submit_step`, `revise_step`, `enter_sub_workflow`, `list_sessions`, `delete_session`, `generate_artifact`.
+Twelve tools, organised by lifecycle stage:
+
+- **Discovery / start:** `list_workflows`, `start_workflow`
+- **Step loop:** `get_state`, `get_guidelines`, `submit_step`, `revise_step`
+- **Nested flows:** `enter_sub_workflow` (author-declared child via step `call:`), `push_flow` / `pop_flow` (client-initiated digression, with automatic resumption)
+- **Session lifecycle:** `list_sessions`, `delete_session`, `generate_artifact`
 
 The server never calls any LLM. Zero LLM imports, zero provider references. Tool responses are plain dicts (`directive`, `gates`, `anti_patterns`, plus 7 global `_DO_NOT_RULES`).
 
@@ -101,10 +94,23 @@ The server never calls any LLM. Zero LLM imports, zero provider references. Tool
 - Top-level `guardrails` evaluate keyword/count/revisit triggers and can `warn`, `force_branch`, or `escalate` (irrecoverable).
 - `intermediate_artifacts` allow multi-checkpoint validation within a single step.
 - `branches` let an LLM select a non-linear next step from a declared option set.
+- Frame stack distinguishes **call-frames** (author-declared via step `call:`, author-resumed) from **digression-frames** (client-pushed via `push_flow`, client- or auto-resumed on completion). `get_state` returns the full chain so any participant can locate itself; depth is capped at 3 to leave headroom under the 5-session cap.
 
 ### Session state
 
-In-memory dict store. Sessions have `session_id`, `workflow_type`, `current_step`, `step_data`, timestamps. Cap of 5 active sessions, TTL-based expiration. No SQLite, no external state store — keeps the runtime trivially deployable.
+SQLite-backed store (single file, no external service — stays trivially deployable). Sessions carry `session_id`, `workflow_type`, `current_step`, `step_data`, retry and visit counters, timestamps, and — when nested — a `session_stack` row linking them to their root and recording frame type. A detached-snapshot invariant applies: reads return freshly-constructed dicts, so mutations only persist through the dedicated update helpers.
+
+## MCP servers
+
+Workflows are grouped by **category**, and each category lives in its own MCP server (a thin wrapper around `megalos-server` that exposes the workflows for that category). Mix and match — connect to one server, several, or all, depending on the kinds of work you want structured:
+
+| Server | Category | Workflows | Remote |
+|--------|----------|-----------|--------|
+| `megalos-writing` | writing & communication | essay, blog | [github.com/agora-creations/megalos-writing](https://github.com/agora-creations/megalos-writing) |
+| `megalos-analysis` | analysis & decision | research, decision | [github.com/agora-creations/megalos-analysis](https://github.com/agora-creations/megalos-analysis) |
+| `megalos-professional` | professional | coding | [github.com/agora-creations/megalos-professional](https://github.com/agora-creations/megalos-professional) |
+
+This repo itself bundles only `megalos_server/workflows/example.yaml` as a reference workflow plus `tests/fixtures/workflows/` (one canonical 3-step framework fixture plus seven demo fixtures). Production workflows live exclusively in their category-specific repos.
 
 ## Authoring a new domain repo
 
@@ -115,7 +121,30 @@ The pattern is mechanical. Replicate one of the existing domain repos and:
 3. `pip install -e ".[test]" && pytest && python main.py` to verify.
 4. Push.
 
-A future authoring guide will document this end to end.
+A future authoring guide will document this end to end. In the meantime, [`docs/AUTHORING.md`](docs/AUTHORING.md) covers step-level mechanics (context injection, gates, branches, sub-workflows, push/pop flows).
+
+## Cross-model panel (optional extra)
+
+`megalos_panel` is a small utility for invoking multiple LLM providers (Claude, OpenAI) against the same prompt in a single batched call. It powers measurement and fixture-authoring work — not the server runtime. The core server never imports it; the boundary is enforced by a hermeticity test so the three-dependency runtime claim stays load-bearing.
+
+Install the extra when you need it:
+
+```bash
+pip install "megalos[panel]"       # or: uv sync --extra panel
+```
+
+Public surface (import from `megalos_panel`):
+
+```python
+from megalos_panel import panel_query, PanelRequest, RecordWriter
+
+results = panel_query([
+    PanelRequest(request_id="q1", prompt="...", model="claude-opus-4-7"),
+    PanelRequest(request_id="q1", prompt="...", model="gpt-4o"),
+])
+```
+
+Provider SDKs resolve by model-name prefix (`claude-` → Anthropic, `gpt-` → OpenAI). Retries, backoff, rate-limit classification, and JSON-lines record IO are built in. See [`docs/panel.md`](docs/panel.md) for the full API, error taxonomy, and retry budgets.
 
 ## simplicity-guard
 
@@ -131,7 +160,7 @@ mikrós (ancient Greek: *small*) is a separate, future project: a lightweight ag
 
 **A task must fit in one context window. If it can't, it's two tasks.**
 
-Operational test for task granularity. `/plan-slice` refuses to emit a plan that violates it. Compression is for *output*, not *task scope* — when a task feels too big, split it; never compress the surrounding context to fit.
+Operational test for task granularity. Compression is for *output*, not *task scope* — when a task feels too big, split it; never compress the surrounding context to fit.
 
 ## License
 
