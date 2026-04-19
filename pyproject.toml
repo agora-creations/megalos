@@ -29,7 +29,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["megalos_server*"]
+include = ["megalos_server*", "megalos_panel*"]
 
 [tool.setuptools.package-data]
 megalos_server = ["workflows/*.yaml", "*.md"]
@@ -40,7 +40,10 @@ megalos_server = ["workflows/*.yaml", "*.md"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
-addopts = "--cov --cov-fail-under=83"
+addopts = "--cov --cov-fail-under=83 -m 'not live'"
+markers = [
+    "live: requires live provider API keys and network; skipped in standard CI gate",
+]
 
 [tool.coverage.run]
 branch = true
