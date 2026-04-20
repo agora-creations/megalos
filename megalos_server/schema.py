@@ -2,6 +2,7 @@
 
 import os
 import re
+from typing import TYPE_CHECKING
 
 import jsonschema
 import yaml
@@ -9,10 +10,19 @@ from pathlib import Path
 
 from .errors import YAML_MAX
 
+if TYPE_CHECKING:
+    from .mcp_registry import Registry
+
 
 REQUIRED_STEP_KEYS = {"id", "title", "directive_template", "gates", "anti_patterns"}
+# Subset required for non-LLM step types (e.g. `action: mcp_tool_call`).
+# LLM-prompt fields are rejected for these steps by mutex rules.
+_REQUIRED_STEP_KEYS_MCP = {"id", "title"}
 
 _REF_SEGMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]*$")
+# A ref-path string is a full-string match on `${step_data.<segments>}`.
+# Anchored at start/end — any surrounding text counts as mixed interpolation.
+_REF_STRING_RE = re.compile(r"^\$\{step_data\.[^}]+\}$")
 
 
 def _is_valid_ref_path(ref: str) -> bool:
@@ -25,6 +35,164 @@ def _is_valid_ref_path(ref: str) -> bool:
         if not _REF_SEGMENT_RE.match(seg):
             return False
     return True
+
+
+def _validate_mcp_arg_value(
+    value: object, label: str, path: str, errors: list[str]
+) -> None:
+    """Recursively validate a value inside an mcp_tool_call `args` tree.
+
+    Accepts scalars, nested dicts, nested lists. Strings that contain `${`
+    must fully match the ref-path pattern `${step_data.<path>}`; otherwise
+    they trip `mcp_tool_call_mixed_interpolation_not_supported`. Fully-matching
+    ref-path strings are further validated against the same ref-path grammar
+    used by preconditions (`step_data.<sid>[.<field>...]`).
+    """
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if not isinstance(k, str):
+                errors.append(
+                    f"Step '{label}' args{path}: keys must be strings, "
+                    f"got {type(k).__name__}"
+                )
+                continue
+            _validate_mcp_arg_value(v, label, f"{path}.{k}", errors)
+        return
+    if isinstance(value, list):
+        for i, item in enumerate(value):
+            _validate_mcp_arg_value(item, label, f"{path}[{i}]", errors)
+        return
+    if isinstance(value, str):
+        if "${" not in value:
+            return  # literal string; nothing to validate
+        if not _REF_STRING_RE.match(value):
+            errors.append(
+                f"Step '{label}' args{path}: mixed interpolation not supported "
+                f"(value must be either a literal or a whole-string "
+                f"'${{step_data.<ref>}}' — got {value!r}) "
+                f"(code: mcp_tool_call_mixed_interpolation_not_supported)"
+            )
+            return
+        inner = value[2:-1]  # strip ${ and }
+        if not _is_valid_ref_path(inner):
+            errors.append(
+                f"Step '{label}' args{path}: ref-path is malformed "
+                f"(value {value!r}); refs must match "
+                f"'${{step_data.<sid>[.<field>...]}}' "
+                f"(code: mcp_tool_call_invalid_ref_path)"
+            )
+        return
+    # bool/int/float/None scalars are accepted as literals; no further check.
+    if isinstance(value, (bool, int, float)) or value is None:
+        return
+    errors.append(
+        f"Step '{label}' args{path}: unsupported value type "
+        f"{type(value).__name__} (expected scalar, string, list, or mapping)"
+    )
+
+
+# Fields that must NOT appear on a step whose `action` is `mcp_tool_call`.
+# Each entry pairs the forbidden field with the specific error code the plan
+# spells out. Kept as a tuple of tuples rather than a dict so ordering is
+# deterministic in error messages.
+_MCP_MUTEX_FIELDS: tuple[tuple[str, str], ...] = (
+    ("directive_template", "mcp_tool_call_with_directive_template"),
+    ("gates", "mcp_tool_call_with_gates"),
+    ("anti_patterns", "mcp_tool_call_with_anti_patterns"),
+    ("call", "mcp_tool_call_with_call"),
+    ("collect", "mcp_tool_call_with_collect"),
+    ("output_schema", "mcp_tool_call_with_output_schema"),
+)
+
+_MCP_ALLOWED_STEP_KEYS: frozenset[str] = frozenset(
+    {"id", "title", "action", "server", "tool", "args", "timeout",
+     "step_description", "precondition", "branches", "default_branch"}
+)
+
+
+def _validate_mcp_tool_call_step(step: dict, label: str, errors: list[str]) -> None:
+    """Validate a step whose `action` is `mcp_tool_call`.
+
+    Handles: literal-only server/tool, recursive arg validation, mutex
+    rejections, timeout bounds. Non-goals: runtime resolution (T02),
+    registry cross-check (runs at workflow level).
+    """
+    # server
+    if "server" not in step:
+        errors.append(f"Step '{label}' (mcp_tool_call) missing required key 'server'")
+    else:
+        server = step["server"]
+        if not isinstance(server, str) or not server:
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) server must be a non-empty string"
+            )
+        elif "${" in server:
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) server must be a literal string, "
+                f"not an interpolation (got {server!r}) "
+                f"(code: mcp_tool_call_server_not_literal)"
+            )
+    # tool
+    if "tool" not in step:
+        errors.append(f"Step '{label}' (mcp_tool_call) missing required key 'tool'")
+    else:
+        tool = step["tool"]
+        if not isinstance(tool, str) or not tool:
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) tool must be a non-empty string"
+            )
+        elif "${" in tool:
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) tool must be a literal string, "
+                f"not an interpolation (got {tool!r}) "
+                f"(code: mcp_tool_call_tool_not_literal)"
+            )
+    # args
+    if "args" not in step:
+        errors.append(f"Step '{label}' (mcp_tool_call) missing required key 'args'")
+    else:
+        args = step["args"]
+        if not isinstance(args, dict):
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) args must be a mapping, "
+                f"got {type(args).__name__}"
+            )
+        else:
+            for k, v in args.items():
+                if not isinstance(k, str):
+                    errors.append(
+                        f"Step '{label}' (mcp_tool_call) args keys must be strings"
+                    )
+                    continue
+                _validate_mcp_arg_value(v, label, f".{k}", errors)
+    # timeout
+    if "timeout" in step:
+        t = step["timeout"]
+        if isinstance(t, bool) or not isinstance(t, (int, float)):
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) timeout must be a number"
+            )
+        elif t <= 0:
+            errors.append(
+                f"Step '{label}' (mcp_tool_call) timeout must be positive"
+            )
+    # Mutex rejections
+    for field, code in _MCP_MUTEX_FIELDS:
+        if field in step:
+            errors.append(
+                f"Step '{label}' has both 'action: mcp_tool_call' and {field!r}; "
+                f"mcp_tool_call steps are non-LLM and cannot declare this field "
+                f"(code: {code})"
+            )
+    # Unknown fields — catches typos early. Kept strict like mcp_registry.
+    unknown = set(step.keys()) - _MCP_ALLOWED_STEP_KEYS
+    # Fields already flagged by mutex rules shouldn't double-report.
+    unknown -= {f for f, _ in _MCP_MUTEX_FIELDS}
+    if unknown:
+        errors.append(
+            f"Step '{label}' (mcp_tool_call) has unknown field(s) "
+            f"{sorted(unknown)!r}"
+        )
 
 
 def _validate_step_optional_fields(step: dict, label: str, errors: list[str]) -> None:
@@ -343,8 +511,17 @@ def validate_workflow_calls(workflows: dict[str, dict]) -> list[str]:
     return errors
 
 
-def validate_workflow(path: str) -> tuple[list[str], dict | None]:
-    """Validate a workflow YAML file. Returns (errors, parsed_doc). Empty errors = valid."""
+def validate_workflow(
+    path: str, registry: "Registry | None" = None
+) -> tuple[list[str], dict | None]:
+    """Validate a workflow YAML file. Returns (errors, parsed_doc). Empty errors = valid.
+
+    Optional ``registry``: if provided and the workflow contains
+    ``action: mcp_tool_call`` steps, each step's ``server`` must be present in
+    the registry or load fails. If not provided and the workflow has any
+    ``mcp_tool_call`` steps, load fails with a registry-required message.
+    Workflows with no such steps pass regardless (back-compat).
+    """
     try:
         size = os.path.getsize(path)
     except OSError as e:
@@ -390,9 +567,21 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     if len(doc["steps"]) == 0:
         errors.append("Workflow must have at least one step")
         return errors, None
+    mcp_steps: list[tuple[str, dict]] = []
     for i, step in enumerate(doc["steps"]):
         if not isinstance(step, dict):
             errors.append(f"Step {i} must be a mapping")
+            continue
+        label = step.get("id", str(i))
+        if step.get("action") == "mcp_tool_call":
+            missing = _REQUIRED_STEP_KEYS_MCP - step.keys()
+            if missing:
+                errors.append(
+                    f"Step {i} ('{step.get('id', '?')}') (mcp_tool_call) "
+                    f"missing keys: {sorted(missing)}"
+                )
+            _validate_mcp_tool_call_step(step, label, errors)
+            mcp_steps.append((label, step))
             continue
         missing = REQUIRED_STEP_KEYS - step.keys()
         if missing:
@@ -401,8 +590,29 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
             errors.append(f"Step '{step.get('id', i)}' gates must be a list")
         if "anti_patterns" in step and not isinstance(step["anti_patterns"], list):
             errors.append(f"Step '{step.get('id', i)}' anti_patterns must be a list")
-        label = step.get("id", str(i))
         _validate_step_optional_fields(step, label, errors)
+    # Registry cross-check for mcp_tool_call steps.
+    if mcp_steps:
+        wf_name = doc.get("name", Path(path).stem)
+        if registry is None:
+            errors.append(
+                f"Workflow '{wf_name}' has {len(mcp_steps)} mcp_tool_call step(s) "
+                f"but no registry was provided; pass --registry <path> or place "
+                f"mcp_servers.yaml alongside the workflow "
+                f"(code: mcp_tool_call_registry_required)"
+            )
+        else:
+            available = registry.names()
+            for step_label, step in mcp_steps:
+                server = step.get("server")
+                if not isinstance(server, str) or not server or "${" in server:
+                    continue  # field-level error already recorded
+                if server not in registry.servers:
+                    errors.append(
+                        f"Workflow '{wf_name}' step '{step_label}' references "
+                        f"unknown MCP server {server!r}; available names: "
+                        f"{available} (code: mcp_tool_call_unknown_server)"
+                    )
     # Cross-step pass: precondition forward-refs, first-step, sub-path vs schemaless
     _validate_workflow_preconditions(doc["steps"], errors)
     # Cross-reference: inject_context 'from' must point to an existing step ID
@@ -462,9 +672,9 @@ def validate_workflow(path: str) -> tuple[list[str], dict | None]:
     return errors, doc
 
 
-def load_workflow(path: str) -> dict:
+def load_workflow(path: str, registry: "Registry | None" = None) -> dict:
     """Load and validate a workflow YAML file. Returns plain dict."""
-    errors, doc = validate_workflow(path)
+    errors, doc = validate_workflow(path, registry=registry)
     if errors:
         raise ValueError(errors[0])
     assert doc is not None

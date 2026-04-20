@@ -30,6 +30,7 @@ Each entry in `steps` is a mapping with:
 | `precondition` | mapping | no | Optional gate on whether this step is reachable, declared against prior-step output. Exactly one of two predicates: `when_equals` (scalar equality) or `when_present` (presence check). See "Precondition" section below. |
 | `call` | string | no | Name of a child workflow to invoke declaratively when this step is reached. See "Sub-workflow call" section below. |
 | `call_context_from` | string | no | Optional ref-path (`step_data.<step_id>[.<field>...]`) selecting a sub-tree of parent `step_data` to seed the child workflow's context. Requires `call` on the same step. See "Sub-workflow call" section below. |
+| `action` | string | no | When set to `"mcp_tool_call"`, marks the step as a non-LLM external tool call; the `directive_template`/`gates`/`anti_patterns` trio is replaced by `server` + `tool` + `args`. See "MCP tool call" section below. |
 
 ## Sub-workflow call
 
@@ -72,6 +73,69 @@ A step may declare a `call` field to invoke a child workflow declaratively. The 
 - `call` + `precondition` — allowed. The precondition gates whether the child is invoked at all.
 
 **Cross-workflow checks** (target existence and cycle detection across the `call` graph) run at workflow-load time; see M004/S01/T02 notes in `docs/AUTHORING.md` for details.
+
+## MCP tool call
+
+A step may declare `action: mcp_tool_call` to invoke an external MCP server tool instead of driving an LLM turn. MCP-tool-call steps are **non-LLM**: they do not carry a `directive_template`, `gates`, `anti_patterns`, or any of the data-collection fields. They just name a server + tool and supply arguments.
+
+```yaml
+- id: fetch_weather
+  title: Pull forecast
+  action: mcp_tool_call
+  server: weather
+  tool: get_forecast
+  args:
+    city: "${step_data.intake.city}"
+    units: metric
+```
+
+### Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `action` | string literal `"mcp_tool_call"` | yes | Step-type discriminator. |
+| `server` | string | yes | Literal server name; must match an entry in the registry (`mcp_servers.yaml`). Interpolations (`${...}`) are rejected. |
+| `tool` | string | yes | Literal tool name on that server. Interpolations are rejected. |
+| `args` | mapping | yes | Argument payload. Keys are strings. Values are scalars, literal strings, ref-path strings, nested mappings, or nested lists. |
+| `timeout` | number | no | Per-call timeout in seconds. Must be positive. `bool` is rejected. Falls back to `timeout_default` on the server entry when omitted. |
+
+### Args grammar
+
+- Scalars (`int`, `float`, `bool`, `null`) pass as literals.
+- String values are either pure literals (no `${` substring) or a **whole-string** ref-path `"${step_data.<sid>[.<field>...]}"`. Mixed interpolation like `"hello ${step_data.name}"` or `"${step_data.x} suffix"` is rejected at load time (`mcp_tool_call_mixed_interpolation_not_supported`). If mixed interpolation ever lands, it will be a non-breaking grammar extension.
+- Mappings and lists nest freely; the validator walks the full tree.
+- Ref-path strings use the same grammar as `precondition.when_equals.ref` — `step_data.` prefix followed by `.`-separated segments matching `^[A-Za-z_][A-Za-z0-9_-]*$`. Malformed ref-paths are rejected at load (`mcp_tool_call_invalid_ref_path`).
+
+Whether a ref-path actually resolves at runtime depends on which prior steps ran; unresolved refs are a runtime concern, not a load-time one.
+
+### Mutex rules (parse-time)
+
+An `mcp_tool_call` step must not declare any of the following fields. Each violation has its own error code:
+
+| Forbidden field | Error code |
+|-----------------|------------|
+| `directive_template` | `mcp_tool_call_with_directive_template` |
+| `gates`              | `mcp_tool_call_with_gates` |
+| `anti_patterns`      | `mcp_tool_call_with_anti_patterns` |
+| `call`               | `mcp_tool_call_with_call` |
+| `collect`            | `mcp_tool_call_with_collect` |
+| `output_schema`      | `mcp_tool_call_with_output_schema` |
+
+Literal-only violations on `server` and `tool` carry the codes `mcp_tool_call_server_not_literal` and `mcp_tool_call_tool_not_literal` respectively.
+
+### Allowed compositions
+
+- `action: mcp_tool_call` + `precondition` — allowed. The precondition gates whether the tool is invoked at all.
+- `action: mcp_tool_call` + `branches` / `default_branch` — allowed. Branching evaluates against the tool's return envelope after it lands.
+- `action: mcp_tool_call` + `step_description` — allowed. Pure authoring metadata.
+
+### Registry cross-check
+
+Workflow validation accepts an optional `Registry` loaded from `mcp_servers.yaml`. When provided, each `mcp_tool_call` step's `server` field is checked against the registry; an unknown name fails load with the step's id, the missing name, and the list of known names (`mcp_tool_call_unknown_server`).
+
+When the registry is **not** provided, workflows that contain any `mcp_tool_call` step fail load with `mcp_tool_call_registry_required`. Workflows without `mcp_tool_call` steps pass regardless — back-compat for everything that predates this step type.
+
+The CLI entry point `python -m megalos_server.validate <workflow>` accepts an optional `--registry <path>` flag. Without it, the CLI looks for `mcp_servers.yaml` next to the workflow file first, then in the current working directory. First hit wins. If neither location has one and the workflow needs a registry, the CLI surfaces the load-time error and exits non-zero.
 
 ## Precondition
 
