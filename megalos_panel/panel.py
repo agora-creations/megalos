@@ -35,6 +35,7 @@ from .retry import (
     TRANSIENT_ATTEMPTS,
     retry_with_backoff,
 )
+from .throttle import Throttle, estimate_tokens
 from .types import PanelRequest, PanelResult
 
 if TYPE_CHECKING:
@@ -46,6 +47,7 @@ def panel_query(
     *,
     record_writer: "RecordWriter | None" = None,
     max_workers: int = 8,
+    throttle: Throttle | None = None,
 ) -> dict[str, PanelResult]:
     """Dispatch ``requests`` across provider adapters concurrently.
 
@@ -81,6 +83,8 @@ def panel_query(
         def call_once() -> str:
             nonlocal attempts
             attempts += 1
+            if throttle is not None:
+                throttle.acquire(estimate_tokens(request.prompt))
             return adapter.invoke(request)
 
         start = time.monotonic()

@@ -13,6 +13,7 @@ load ``anthropic`` or ``openai``. The invariant is enforced by
 from .errors import PanelProviderError
 from .panel import panel_query
 from .record import RecordReader, RecordWriter
+from .throttle import Throttle, estimate_tokens
 from .types import PanelRequest, PanelResult
 
 __all__ = [
@@ -21,5 +22,7 @@ __all__ = [
     "PanelResult",
     "RecordReader",
     "RecordWriter",
+    "Throttle",
+    "estimate_tokens",
     "panel_query",
 ]
