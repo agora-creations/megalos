@@ -229,7 +229,7 @@ def test_called_workflow_error_wrapper_has_three_fields():
     parent_sid, child_sid = _spawn(_PARENT + "-guard")
     r = _trigger_guardrail(parent_sid, child_sid)
     assert set(r["called_workflow_error"].keys()) == {
-        "child_session_id", "child_workflow_type", "child_error"
+        "child_session_fingerprint", "child_workflow_type", "child_error"
     }
 
 
@@ -274,4 +274,5 @@ def test_parent_owned_guard_envelope_includes_parent_sid_and_call_step():
     parent_sid, child_sid = _spawn(_PARENT + "-guard")
     _trigger_guardrail(parent_sid, child_sid)
     r = call_tool("revise_step", {"session_id": child_sid, "step_id": "c1"})
-    assert r.get("parent_session_id") == parent_sid and r.get("call_step_id") == "p2"
+    assert r.get("parent_session_fingerprint") == state._compute_fingerprint(parent_sid)
+    assert r.get("call_step_id") == "p2"

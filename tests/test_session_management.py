@@ -73,4 +73,4 @@ class TestDeleteSession:
         _clear_sessions()
         r = call_tool("delete_session", {"session_id": "nonexistent"})
         assert "error" in r
-        assert r["session_id"] == "nonexistent"
+        assert r["session_fingerprint"] == state._compute_fingerprint("nonexistent")

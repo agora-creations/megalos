@@ -284,11 +284,12 @@ def test_child_cascade_wraps_parent_and_retains_child():
         )
         # Three-field wrapper contract.
         assert set(bridge["called_workflow_error"].keys()) == {
-            "child_session_id",
+            "child_session_fingerprint",
             "child_workflow_type",
             "child_error",
         }
-        assert bridge["called_workflow_error"]["child_session_id"] == child_sid
+        assert bridge["called_workflow_error"]["child_session_fingerprint"] == \
+            state._compute_fingerprint(child_sid)
         assert bridge["called_workflow_error"]["child_workflow_type"] == child_key
 
         parent = state.get_session(parent_sid)

@@ -18,6 +18,7 @@ from .errors import (
 )
 from .mcp_registry import Registry
 from .state import COMPLETE as _COMPLETE
+from .state import _compute_fingerprint as _fp
 
 _DEFAULT_MAX_RETRIES = 3
 
@@ -198,7 +199,7 @@ def _auto_execute_mcp_steps(
             err = error_response(
                 "skipped_predecessor_reference",
                 f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
-                session_id=session_id,
+                session_fingerprint=_fp(session_id),
                 step_id=next_step_id,
                 referenced_step=e.sid,
                 referencing_field="args",
@@ -228,7 +229,7 @@ def _auto_execute_mcp_steps(
             err = error_response(
                 "skipped_predecessor_reference",
                 f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
-                session_id=session_id,
+                session_fingerprint=_fp(session_id),
                 step_id=next_step_id,
                 referenced_step=e.sid,
                 referencing_field="precondition",
@@ -260,7 +261,11 @@ def _trap_errors(field: str = "unknown"):
                 return fn(*args, **kwargs)
             except KeyError as e:
                 sid = kwargs.get("session_id") or (args[0] if args and isinstance(args[0], str) else None)
-                return error_response("session_not_found", str(e), session_id=sid)
+                return error_response(
+                    "session_not_found",
+                    str(e),
+                    session_fingerprint=_fp(sid) if sid else None,
+                )
             except (TypeError, ValueError) as e:
                 return error_response("invalid_argument", str(e), field=field)
         return wrapper
@@ -286,10 +291,16 @@ def _resolve_session(session_id, workflows):
     try:
         session = state.get_session(session_id)
     except KeyError as e:
-        return None, error_response("session_not_found", str(e), session_id=session_id)
+        return None, error_response(
+            "session_not_found", str(e), session_fingerprint=_fp(session_id)
+        )
     wf = workflows.get(session["workflow_type"])
     if not wf:
-        return None, error_response("workflow_not_loaded", f"Workflow '{session['workflow_type']}' not loaded", session_id=session_id)
+        return None, error_response(
+            "workflow_not_loaded",
+            f"Workflow '{session['workflow_type']}' not loaded",
+            session_fingerprint=session["fingerprint"],
+        )
     return (session, wf), None
 
 
@@ -401,7 +412,7 @@ def _advance_parent(
         return error_response(
             "skipped_predecessor_reference",
             f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
-            session_id=parent_sid,
+            session_fingerprint=_fp(parent_sid),
             step_id=call_step["id"],
             referenced_step=e.sid,
             referencing_field="precondition",
@@ -473,14 +484,14 @@ def _wrap_child_failure_into_parent_escalation(
     )
 
     wrapper = {
-        "child_session_id": child_sid,
+        "child_session_fingerprint": _fp(child_sid),
         "child_workflow_type": child_wf["name"],
         "child_error": child_error,
     }
     return error_response(
         "session_escalated",
-        f"parent escalated due to sub-workflow failure in child '{child_sid}'",
-        parent_session_id=parent_sid,
+        f"parent escalated due to sub-workflow failure in child with fingerprint '{_fp(child_sid)}'",
+        parent_session_fingerprint=_fp(parent_sid),
         called_workflow_error=wrapper,
     )
 
@@ -597,8 +608,8 @@ def _propagate_to_parent(
         return error_response(
             "session_escalated",
             "parent state drift during sub-workflow propagation",
-            parent_session_id=parent_sid,
-            child_session_id=child_sid,
+            parent_session_fingerprint=_fp(parent_sid),
+            child_session_fingerprint=_fp(child_sid),
         )
 
     if call_step.get("output_schema"):
@@ -607,7 +618,7 @@ def _propagate_to_parent(
             child_error = {
                 "status": "validation_error",
                 "errors": validation_errors,
-                "session_id": child_sid,
+                "session_fingerprint": _fp(child_sid),
                 "step_id": child_wf["steps"][-1]["id"],
                 "reason": "parent_output_schema_fail",
                 "message": "child artifact failed parent call-step output_schema",
@@ -811,7 +822,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "schema_violation",
                 f"Step '{session['current_step']}' not found in workflow",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
             )
 
         return {
@@ -847,7 +858,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "session_escalated",
                 "Session is escalated. Resolve the escalation before continuing.",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 escalation=session["escalation"],
             )
 
@@ -856,14 +867,14 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "workflow_complete",
                 "Workflow already complete. Call generate_artifact to get final output.",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
             )
 
         if step_id != current:
             return error_response(
                 "out_of_order_submission",
                 f"Out-of-order submission: expected '{current}', got '{step_id}'",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 expected_step=current,
                 submitted_step=step_id,
             )
@@ -876,7 +887,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 field="content",
                 max_bytes=CONTENT_MAX,
                 actual_bytes=content_bytes,
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 step_id=step_id,
             )
 
@@ -890,12 +901,14 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
         top = state.top_frame_for(session_id)
         if top is not None:
             called_sid = top["session_id"]
+            called_fp = _fp(called_sid)
             return error_response(
                 "sub_workflow_pending",
-                f"a child session '{called_sid}' is already in flight above session '{session_id}'. "
+                f"a child session (fingerprint '{called_fp}') is already in flight above session "
+                f"fingerprint '{session['fingerprint']}'. "
                 f"Complete or revise the child before submitting further steps.",
-                parent_session_id=session_id,
-                child_session_id=called_sid,
+                parent_session_fingerprint=session["fingerprint"],
+                child_session_fingerprint=called_fp,
                 call_step_id=step_id,
                 frame_type=top["frame_type"],
             )
@@ -906,7 +919,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 "call_step_requires_enter_sub_workflow",
                 f"step '{step_id}' has `call: {step['call']}`. Use the `enter_sub_workflow` tool, "
                 f"not `submit_step`, to invoke the child workflow.",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 step_id=step_id,
                 hint="enter_sub_workflow",
                 call_target=step["call"],
@@ -921,7 +934,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                     "invalid_argument",
                     "Step has intermediate_artifacts. Must specify artifact_id.",
                     field="artifact_id",
-                    session_id=session_id,
+                    session_fingerprint=session["fingerprint"],
                     step_id=step_id,
                     expected_artifacts=expected,
                 )
@@ -935,7 +948,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 return error_response(
                     "unknown_artifact",
                     f"Unknown artifact_id '{artifact_id}'",
-                    session_id=session_id,
+                    session_fingerprint=session["fingerprint"],
                     step_id=step_id,
                     expected_artifacts=[a["id"] for a in ia_list],
                 )
@@ -946,7 +959,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 return {
                     "status": "validation_error",
                     "errors": [f"Content is not valid JSON: {e}"],
-                    "session_id": session_id,
+                    "session_fingerprint": session["fingerprint"],
                     "step_id": step_id,
                     "artifact_id": artifact_id,
                 }
@@ -956,7 +969,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 return {
                     "status": "validation_error",
                     "errors": art_errors,
-                    "session_id": session_id,
+                    "session_fingerprint": session["fingerprint"],
                     "step_id": step_id,
                     "artifact_id": artifact_id,
                 }
@@ -991,7 +1004,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                     child_error = error_response(
                         "session_escalated",
                         "Session escalated by guardrail.",
-                        session_id=session_id,
+                        session_fingerprint=session["fingerprint"],
                         guardrail_id=fired_guardrail["id"],
                         message=fired_guardrail["message"],
                     )
@@ -1016,7 +1029,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                         "invalid_argument",
                         f"Invalid branch '{target}'. Valid options: {valid_targets}",
                         field="branch",
-                        session_id=session_id,
+                        session_fingerprint=session["fingerprint"],
                         step_id=step_id,
                     )
                 next_step_id = target
@@ -1030,7 +1043,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 child_error = error_response(
                     "skipped_predecessor_reference",
                     f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
-                    session_id=session_id,
+                    session_fingerprint=session["fingerprint"],
                     step_id=step_id,
                     referenced_step=e.sid,
                     referencing_field="precondition",
@@ -1107,7 +1120,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 child_error = {
                     "status": "validation_error",
                     "errors": validation_errors,
-                    "session_id": session_id,
+                    "session_fingerprint": session["fingerprint"],
                     "step_id": step_id,
                     "retries_exhausted": True,
                     "message": f"Max retries ({max_retries}) exceeded. Workflow stalled.",
@@ -1120,7 +1133,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             err_result: dict = {
                 "status": "validation_error",
                 "errors": validation_errors,
-                "session_id": session_id,
+                "session_fingerprint": session["fingerprint"],
                 "step_id": step_id,
                 "retries_remaining": max_retries - retry_count,
             }
@@ -1145,7 +1158,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 child_error = error_response(
                     "session_escalated",
                     "Session escalated by guardrail.",
-                    session_id=session_id,
+                    session_fingerprint=session["fingerprint"],
                     guardrail_id=fired_guardrail["id"],
                     message=fired_guardrail["message"],
                 )
@@ -1171,7 +1184,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                     "invalid_argument",
                     f"Invalid branch '{target}'. Valid options: {valid_targets}",
                     field="branch",
-                    session_id=session_id,
+                    session_fingerprint=session["fingerprint"],
                     step_id=step_id,
                 )
             next_step_id = target
@@ -1185,7 +1198,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             child_error = error_response(
                 "skipped_predecessor_reference",
                 f"Step '{e.referencing_step_id}' precondition references skipped predecessor '{e.sid}'",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 step_id=step_id,
                 referenced_step=e.sid,
                 referencing_field="precondition",
@@ -1283,10 +1296,11 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             parent_current_step = parent_session.get("current_step", "") if parent_session else ""
             return error_response(
                 "sub_workflow_parent_owned",
-                f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                f"child session fingerprint '{session['fingerprint']}' is owned by parent fingerprint "
+                f"'{_fp(parent_sid) if parent_sid else None}' at "
                 f"step '{parent_current_step}'. Revise the parent's step to unlink.",
-                session_id=session_id,
-                parent_session_id=parent_sid,
+                session_fingerprint=session["fingerprint"],
+                parent_session_fingerprint=_fp(parent_sid) if parent_sid else None,
                 call_step_id=parent_current_step,
                 frame_type=own["frame_type"],
             )
@@ -1297,7 +1311,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 "invalid_argument",
                 f"Step '{step_id}' not found in workflow",
                 field="step_id",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
             )
 
         # Call-steps: allow revise even when step_data[step_id] absent if a child is
@@ -1309,7 +1323,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 "invalid_argument",
                 f"Step '{step_id}' has not been completed yet",
                 field="step_id",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
             )
 
         previous_content = session["step_data"].get(step_id, "")
@@ -1364,13 +1378,13 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "workflow_complete",
                 "Parent workflow already complete.",
-                session_id=parent_session_id,
+                session_fingerprint=parent_session["fingerprint"],
             )
         if parent_session.get("escalation"):
             return error_response(
                 "session_escalated",
                 "Parent session is escalated. Resolve the escalation before continuing.",
-                session_id=parent_session_id,
+                session_fingerprint=parent_session["fingerprint"],
                 escalation=parent_session["escalation"],
             )
 
@@ -1378,7 +1392,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "out_of_order_submission",
                 f"parent current_step is '{parent_session['current_step']}', not '{call_step_id}'",
-                session_id=parent_session_id,
+                session_fingerprint=parent_session["fingerprint"],
                 expected_step=parent_session["current_step"],
                 submitted_step=call_step_id,
             )
@@ -1389,7 +1403,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 "invalid_argument",
                 f"parent step '{call_step_id}' has no `call` field",
                 field="call_step_id",
-                session_id=parent_session_id,
+                session_fingerprint=parent_session["fingerprint"],
             )
 
         pending_child = state.top_frame_for(parent_session_id)
@@ -1397,8 +1411,8 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 SUB_WORKFLOW_PENDING,
                 "a child session is already in flight for this call-step",
-                child_session_id=pending_child["session_id"],
-                parent_session_id=parent_session_id,
+                child_session_fingerprint=_fp(pending_child["session_id"]),
+                parent_session_fingerprint=parent_session["fingerprint"],
                 call_step_id=call_step_id,
                 frame_type=pending_child["frame_type"],
             )
@@ -1420,7 +1434,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                     "invalid_argument",
                     f"call_context_from '{ccf}' did not resolve in parent step_data",
                     field="call_context_from",
-                    session_id=parent_session_id,
+                    session_fingerprint=parent_session["fingerprint"],
                 )
             child_context = extracted if isinstance(extracted, str) else json.dumps(extracted)
 
@@ -1487,13 +1501,13 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "workflow_complete",
                 "Outer workflow already complete — cannot push a digression.",
-                session_id=session_id,
+                session_fingerprint=outer_session["fingerprint"],
             )
         if outer_session.get("escalation"):
             return error_response(
                 "session_escalated",
                 "Outer session is escalated. Resolve the escalation before pushing a digression.",
-                session_id=session_id,
+                session_fingerprint=outer_session["fingerprint"],
                 escalation=outer_session["escalation"],
             )
 
@@ -1501,7 +1515,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "out_of_order_submission",
                 f"outer current_step is '{outer_session['current_step']}', not '{paused_at_step}'",
-                session_id=session_id,
+                session_fingerprint=outer_session["fingerprint"],
                 expected_step=outer_session["current_step"],
                 submitted_step=paused_at_step,
             )
@@ -1509,12 +1523,13 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
         # Generalized pending guard: outer must itself be at the top of its chain.
         top = state.top_frame_for(session_id)
         if top is not None:
+            top_fp = _fp(top["session_id"])
             return error_response(
                 SUB_WORKFLOW_PENDING,
-                f"a child session '{top['session_id']}' is already in flight above session "
-                f"'{session_id}'. Resolve it before pushing another digression.",
-                parent_session_id=session_id,
-                child_session_id=top["session_id"],
+                f"a child session (fingerprint '{top_fp}') is already in flight above session "
+                f"fingerprint '{outer_session['fingerprint']}'. Resolve it before pushing another digression.",
+                parent_session_fingerprint=outer_session["fingerprint"],
+                child_session_fingerprint=top_fp,
                 call_step_id=paused_at_step,
                 frame_type=top["frame_type"],
             )
@@ -1544,10 +1559,10 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 SESSION_STACK_FULL,
                 f"session stack full: depth {current_depth} at max {max_stack_depth} "
-                f"for root '{outer_root}'. Resolve a frame before pushing again.",
+                f"for root fingerprint '{_fp(outer_root)}'. Resolve a frame before pushing again.",
                 current_depth=current_depth,
                 max_depth=max_stack_depth,
-                root_session_id=outer_root,
+                root_session_fingerprint=_fp(outer_root),
                 depth_breakdown=state.depth_breakdown(),
             )
 
@@ -1589,10 +1604,10 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 SESSION_STACK_FULL,
                 f"session stack full: depth {e.current_depth} at max {e.max_depth} "
-                f"for root '{e.root_session_id}'. Lost the race; resolve a frame and retry.",
+                f"for root fingerprint '{_fp(e.root_session_id)}'. Lost the race; resolve a frame and retry.",
                 current_depth=e.current_depth,
                 max_depth=e.max_depth,
-                root_session_id=e.root_session_id,
+                root_session_fingerprint=_fp(e.root_session_id),
                 depth_breakdown=state.depth_breakdown(),
             )
         state.increment_visit(child_sid, first_step["id"])
@@ -1650,7 +1665,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             return error_response(
                 "session_escalated",
                 "Session is escalated. Resolve the escalation before popping.",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 escalation=session["escalation"],
             )
 
@@ -1663,16 +1678,16 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             # bottom_frame_pop_rejected branch.
             return error_response(
                 NO_FRAME_TO_POP,
-                f"session '{session_id}' has no stack frame to pop.",
-                session_id=session_id,
+                f"session fingerprint '{session['fingerprint']}' has no stack frame to pop.",
+                session_fingerprint=session["fingerprint"],
             )
 
         if own["frame_type"] == "call":
             return error_response(
                 FRAME_TYPE_NOT_POPPABLE,
-                f"session '{session_id}' is a call-frame; call-frames are "
+                f"session fingerprint '{session['fingerprint']}' is a call-frame; call-frames are "
                 "author-resumed. Use revise_step on the parent's call-step to abandon.",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 frame_type="call",
             )
 
@@ -1707,17 +1722,20 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
             parent_current_step = parent_session.get("current_step", "") if parent_session else ""
             return error_response(
                 "sub_workflow_parent_owned",
-                f"child session '{session_id}' is owned by parent '{parent_sid}' at "
+                f"child session fingerprint '{_fp(session_id)}' is owned by parent fingerprint "
+                f"'{_fp(parent_sid) if parent_sid else None}' at "
                 f"step '{parent_current_step}'. Revise the parent's step to unlink.",
-                session_id=session_id,
-                parent_session_id=parent_sid,
+                session_fingerprint=_fp(session_id),
+                parent_session_fingerprint=_fp(parent_sid) if parent_sid else None,
                 call_step_id=parent_current_step,
                 frame_type=own["frame_type"],
             )
         try:
             deleted = state.delete_session(session_id)
         except KeyError as e:
-            return error_response("session_not_found", str(e), session_id=session_id)
+            return error_response(
+                "session_not_found", str(e), session_fingerprint=_fp(session_id)
+            )
         return {
             "session_id": deleted["session_id"],
             "workflow_type": deleted["workflow_type"],
@@ -1750,7 +1768,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 "invalid_argument",
                 "Workflow not complete. Finish all steps first.",
                 field="session_state",
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
                 remaining_steps=remaining,
             )
 
@@ -1778,7 +1796,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 field="artifact",
                 max_bytes=ARTIFACT_MAX,
                 actual_bytes=artifact_bytes,
-                session_id=session_id,
+                session_fingerprint=session["fingerprint"],
             )
 
         return {
