@@ -146,7 +146,8 @@ def test_spawn_rejects_when_child_already_in_flight():
     first = call_tool("enter_sub_workflow", {"parent_session_id": parent_sid, "call_step_id": "p2"})
     first_child_sid = first["session_id"]
     second = call_tool("enter_sub_workflow", {"parent_session_id": parent_sid, "call_step_id": "p2"})
-    assert second["code"] == "sub_workflow_pending" and second["child_session_id"] == first_child_sid
+    assert second["code"] == "sub_workflow_pending"
+    assert second["child_session_fingerprint"] == state._compute_fingerprint(first_child_sid)
 
 
 def test_call_context_from_extracts_subtree():

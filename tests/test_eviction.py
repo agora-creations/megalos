@@ -80,4 +80,6 @@ def test_cap_eviction_emits_log_line(caplog):
     assert rec.reason == "cap_exceeded"
     assert rec.count == 1
     assert rec.session_cap == 3
-    assert s1 in rec.session_ids
+    # Log lines carry fingerprints, not raw session_ids. Assert the evicted
+    # session's fingerprint appears in the extra payload.
+    assert state._compute_fingerprint(s1) in rec.session_fingerprints

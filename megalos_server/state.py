@@ -46,14 +46,18 @@ class StackFull(Exception):
 
 
 def _log_eviction(reason: str, ids: list[str], **extra: object) -> None:
-    """Emit one INFO line per eviction event. One line per CALL, not per row."""
+    """Emit one INFO line per eviction event. One line per CALL, not per row.
+
+    Logs fingerprints (sha256-truncated), never raw session_ids — log lines carry
+    log-safe identifiers only. Raw ids are the caller's capability token and must
+    not leak to log consumers."""
     _log.info(
         "session_eviction",
         extra={
             "event": "session_eviction",
             "reason": reason,
             "count": len(ids),
-            "session_ids": ids[:10],
+            "session_fingerprints": [_compute_fingerprint(sid) for sid in ids[:10]],
             **extra,
         },
     )

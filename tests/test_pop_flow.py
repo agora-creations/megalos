@@ -193,7 +193,7 @@ def test_pop_flow_rejects_call_frame():
     r = call_tool("pop_flow", {"session_id": child_sid})
     assert r["code"] == "frame_type_not_poppable"
     assert r["frame_type"] == "call"
-    assert r["session_id"] == child_sid
+    assert r["session_fingerprint"] == state._compute_fingerprint(child_sid)
     # Stack unchanged — the guard didn't mutate state.
     assert state.stack_depth(parent_sid) == 1
 
@@ -224,7 +224,7 @@ def test_pop_flow_on_completed_auto_popped_frame():
     bare_sid = _start_outer()
     r2 = call_tool("pop_flow", {"session_id": bare_sid})
     assert r2["code"] == "no_frame_to_pop"
-    assert r2["session_id"] == bare_sid
+    assert r2["session_fingerprint"] == state._compute_fingerprint(bare_sid)
 
 
 # --- guard: escalated session ----------------------------------------------
@@ -239,7 +239,7 @@ def test_pop_flow_rejects_escalated():
 
     r = call_tool("pop_flow", {"session_id": child_sid})
     assert r["code"] == "session_escalated"
-    assert r["session_id"] == child_sid
+    assert r["session_fingerprint"] == state._compute_fingerprint(child_sid)
     # Frame still in place — guard blocked mutation.
     assert state.own_frame(child_sid) is not None
 

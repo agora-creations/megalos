@@ -244,8 +244,8 @@ def test_parent_owned_guard_fires_on_intermediate_frame():
     root_sid, d1_sid, d2_sid = _build_two_deep_digression_chain()
     r = call_tool("revise_step", {"session_id": d1_sid, "step_id": "d1"})
     assert r["code"] == "sub_workflow_parent_owned"
-    assert r["session_id"] == d1_sid
-    assert r["parent_session_id"] == root_sid
+    assert r["session_fingerprint"] == state._compute_fingerprint(d1_sid)
+    assert r["parent_session_fingerprint"] == state._compute_fingerprint(root_sid)
     assert r["frame_type"] == "digression"
     # Sanity: d1 is still framed and d2 is untouched.
     assert state.own_frame(d1_sid) is not None

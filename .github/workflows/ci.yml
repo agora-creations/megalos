@@ -77,6 +77,8 @@ jobs:
         run: uv sync
       - name: ruff check
         run: uv run ruff check megalos_server tests
+      - name: session_id log-hygiene gate
+        run: bash ci/no_raw_session_id_in_logs.sh
 
   typecheck:
     name: typecheck

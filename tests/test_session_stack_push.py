@@ -277,7 +277,7 @@ def test_submit_step_on_outer_rejected_while_digression_in_flight():
     push = _push_digression(outer_sid)
     r = call_tool("submit_step", {"session_id": outer_sid, "step_id": "o2", "content": "oops"})
     assert r["code"] == "sub_workflow_pending"
-    assert r["child_session_id"] == push["session_id"]
+    assert r["child_session_fingerprint"] == state._compute_fingerprint(push["session_id"])
     # Additive field: frame_type carries the blocking frame's type.
     assert r["frame_type"] == "digression"
 
@@ -288,7 +288,7 @@ def test_push_flow_on_outer_rejected_while_digression_in_flight():
     first = _push_digression(outer_sid)
     second = _push_digression(outer_sid)
     assert second["code"] == "sub_workflow_pending"
-    assert second["child_session_id"] == first["session_id"]
+    assert second["child_session_fingerprint"] == state._compute_fingerprint(first["session_id"])
     assert second["frame_type"] == "digression"
 
 
@@ -304,7 +304,7 @@ def test_submit_step_pending_envelope_carries_call_frame_type_for_call_frames():
     child_sid = spawn["session_id"]
     r = call_tool("submit_step", {"session_id": parent_sid, "step_id": "p2", "content": "oops"})
     assert r["code"] == "sub_workflow_pending"
-    assert r["child_session_id"] == child_sid
+    assert r["child_session_fingerprint"] == state._compute_fingerprint(child_sid)
     assert r["frame_type"] == "call"
 
 
@@ -320,7 +320,7 @@ def test_revise_step_on_digression_child_returns_parent_owned_with_digression_fr
     call_tool("submit_step", {"session_id": child_sid, "step_id": "d1", "content": "d1-done"})
     r = call_tool("revise_step", {"session_id": child_sid, "step_id": "d1"})
     assert r["code"] == "sub_workflow_parent_owned"
-    assert r["parent_session_id"] == outer_sid
+    assert r["parent_session_fingerprint"] == state._compute_fingerprint(outer_sid)
     assert r["frame_type"] == "digression"
 
 
@@ -331,7 +331,7 @@ def test_delete_session_on_digression_child_returns_parent_owned_with_digression
     child_sid = push["session_id"]
     r = call_tool("delete_session", {"session_id": child_sid})
     assert r["code"] == "sub_workflow_parent_owned"
-    assert r["parent_session_id"] == outer_sid
+    assert r["parent_session_fingerprint"] == state._compute_fingerprint(outer_sid)
     assert r["frame_type"] == "digression"
 
 
@@ -424,8 +424,10 @@ def test_push_flow_at_max_depth_rejected_with_session_stack_full():
     assert r["code"] == "session_stack_full"
     assert r["current_depth"] == 3
     assert r["max_depth"] == 3
-    assert r["root_session_id"] == root_sid
-    # depth_breakdown present with identical shape as session_cap_exceeded.
+    # session_stack_full error envelope fingerprints the offending root; the
+    # depth_breakdown entries stay on raw root_session_id since they are
+    # stack-topology observability, not an error-surface session identifier.
+    assert r["root_session_fingerprint"] == state._compute_fingerprint(root_sid)
     assert isinstance(r["depth_breakdown"], list)
     assert r["depth_breakdown"] == [{"root_session_id": root_sid, "depth": 3}]
 
@@ -587,7 +589,7 @@ def test_m004_call_child_contributes_to_stack_depth_cap():
     assert r4["code"] == "session_stack_full"
     assert r4["current_depth"] == 3
     assert r4["max_depth"] == 3
-    assert r4["root_session_id"] == parent_sid
+    assert r4["root_session_fingerprint"] == state._compute_fingerprint(parent_sid)
 
 
 def test_session_stack_full_and_session_cap_exceeded_share_depth_breakdown_shape():

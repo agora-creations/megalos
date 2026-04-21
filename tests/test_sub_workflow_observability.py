@@ -10,6 +10,7 @@ Covers:
 
 import pytest  # type: ignore[import-not-found]
 
+from megalos_server import state
 from megalos_server.main import WORKFLOWS
 from tests.conftest import call_tool
 
@@ -195,12 +196,12 @@ def test_call_step_requires_enter_envelope_includes_call_target():
     assert r["call_target"] == _CHILD
 
 
-def test_sub_workflow_pending_envelope_includes_child_session_id():
+def test_sub_workflow_pending_envelope_includes_child_session_fingerprint():
     parent_sid = _start_parent()
     _advance_parent_to_call_step(parent_sid)
     child_sid = _spawn_child(parent_sid)
     r = call_tool("submit_step", {"session_id": parent_sid, "step_id": "p2", "content": "oops"})
-    assert r["child_session_id"] == child_sid
+    assert r["child_session_fingerprint"] == state._compute_fingerprint(child_sid)
 
 
 def test_enter_sub_workflow_already_in_flight_uses_pending_constant():
