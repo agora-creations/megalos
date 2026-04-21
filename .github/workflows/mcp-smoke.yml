@@ -1,15 +1,16 @@
-# Nightly advisory live-smoke for the deployed MCP stub.
-#   - Runs every day at 06:00 UTC + on-demand via workflow_dispatch.
-#   - NOT a required check. Failure signals live-path drift between the
-#     megalos MCP client and the Horizon-deployed stub, not a merge blocker.
+# Manual-dispatch-only advisory live-smoke for the deployed MCP stub.
+#   - Scheduled trigger removed: Horizon free-tier org-auth is mandatory
+#     (per .megalos/DECISIONS.md 2026-04-14 "Fork B"), so the stub endpoint
+#     returns 401 to headless CI and the nightly cron was signalling nothing
+#     but the known-constant auth state. Re-enable the schedule if/when the
+#     Horizon plan permits disabling org-auth.
+#   - NOT a required check. Manual dispatch available for post-change checks.
 #   - MCP_STUB_URL injected from the GitHub secret of the same name;
 #     operator sets the secret after the one-click Horizon deploy.
 
 name: mcp-smoke
 
 on:
-  schedule:
-    - cron: '0 6 * * *'
   workflow_dispatch:
 
 jobs:
