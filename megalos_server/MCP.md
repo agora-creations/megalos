@@ -326,7 +326,7 @@ stub URL is pinned via the `MCP_STUB_URL` GitHub secret and set by the
 operator after running `./stub-deploy.sh` and completing the one-click
 deploy on horizon.prefect.io.
 
-- Current URL: `<PINNED AFTER OPERATOR DEPLOY>`
+- Current URL: `https://mcp-stub.fastmcp.app/mcp`
 - Trigger: `schedule: '0 6 * * *'` (06:00 UTC) + `workflow_dispatch`.
 - Check name: `mcp-smoke`. **Not** a required check — advisory only.
 - A red run indicates live-path drift between the client and the
