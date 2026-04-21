@@ -5,6 +5,18 @@ plus idempotence, backward-compat on URL-safe tokens, and a combined
 case-exercise. The contract is a design artifact: a future regression in
 ``normalize_session_id`` fails a real test here rather than silently
 re-opening the rate-limit bypass surfaced by T03.
+
+BACKWARD-COMPAT ANCHOR — READ BEFORE "OPTIMISING":
+``test_url_safe_token_idempotent_fold`` is the load-bearing proof that
+normalisation is a NO-OP for legitimate session flows. The real session
+id generator (``secrets.token_urlsafe(32)``) produces URL-safe base64,
+which contains no case-variant letters-in-both-forms, no non-ASCII code
+points, no whitespace — every live session_id round-trips unchanged
+through NFC + casefold + strip. Normalisation only bites on attacker-
+supplied keys (the three bypass classes T03 surfaced). A future
+maintainer tempted to "skip normalisation for performance" on the hot
+path would re-open the exact bypass this milestone closed; the
+round-trip test is what keeps that option off the table.
 """
 
 from __future__ import annotations

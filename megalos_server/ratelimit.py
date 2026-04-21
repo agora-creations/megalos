@@ -33,8 +33,6 @@ from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Callable
 
-from .session_canon import normalize_session_id
-
 _log = logging.getLogger("megalos_server.ratelimit")
 
 # ---------------------------------------------------------------------------
@@ -234,18 +232,19 @@ class RateLimiter:
         On deny, retry_after_ms is the milliseconds until enough tokens
         refill to cover the request.
 
-        On the session axis, ``key`` is folded through the shared
-        ``normalize_session_id`` canonicaliser before bucket lookup so case /
-        Unicode NFC-NFD / whitespace variants of the same logical session
-        key the SAME bucket. The middleware already normalises at its own
-        layer; this call is belt-and-suspenders so any code path reaching
-        the limiter (adversarial tests, direct callers, future wiring) can
-        NOT silently re-open the bypass class T03 surfaced.
+        **Contract:** on the session axis, ``key`` must already be in
+        canonical form (produced by ``session_canon.normalize_session_id``).
+        This function does NOT self-normalise — normalisation is the
+        caller's responsibility, performed once at the layer boundary
+        (state.py entry points, middleware session_id extraction). A
+        single normalisation site per boundary means drift between
+        layers surfaces loudly through the adversarial bypass tests,
+        rather than being silently masked here. See
+        ``test_try_consume_session_axis_requires_canonical_key`` for the
+        test-documented version of this contract.
         """
         if axis not in _AXES:
             raise ValueError(f"unknown axis: {axis}")
-        if axis == AXIS_SESSION:
-            key = normalize_session_id(key)
         now = self._monotonic()
         bucket = self._get_bucket(axis, key, now)
         # Sync-inner block: no await between read and write.
