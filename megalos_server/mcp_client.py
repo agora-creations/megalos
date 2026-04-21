@@ -77,6 +77,13 @@ _DEFAULT_TIMEOUT_S: float = 30.0
 # a generic protocol-level error — conservative default.
 _SCHEMA_ERROR_CODES: frozenset[int] = frozenset({mcp.types.INVALID_PARAMS})
 
+# Retry policy for transient TransportError / TimeoutError outcomes.
+# Deterministic exponential backoff, no jitter — megalos runs one MCP call
+# at a time per workflow step, so jitter buys us nothing and costs test
+# determinism. Three total attempts → two inter-attempt sleeps.
+_RETRY_MAX_ATTEMPTS: int = 3
+_RETRY_BACKOFFS_S: tuple[float, ...] = (0.2, 0.4)
+
 
 # Module-global per-process inputSchema validator cache. Keyed by
 # ``(server_name, tool_name)``; value is a compiled ``Draft7Validator``.
@@ -193,9 +200,9 @@ def call(
     arg_fp = _arg_fingerprint(args)
     start = time.monotonic()
     try:
-        outcome = asyncio.run(
-            _call_with_validation_async(
-                server_name, cfg, tool, args, effective_timeout, registry
+        outcome, attempts = asyncio.run(
+            _call_with_retry_async(
+                server_name, cfg, tool, args, effective_timeout, registry, arg_fp
             )
         )
     except Exception as exc:  # noqa: BLE001 — conservative catch-all
@@ -205,21 +212,106 @@ def call(
             extra={"server": server_name, "tool": tool},
         )
         outcome = ProtocolError(detail=repr(exc), duration_ms=duration_ms)
+        attempts = 1
 
-    _log.info(
-        "mcp call",
-        extra={
-            "server": server_name,
-            "tool": tool,
-            "duration_ms": outcome.duration_ms,
-            "outcome": outcome.kind,
-            "arg_fingerprint": arg_fp,
-        },
-    )
+    total_ms = (time.monotonic() - start) * 1000.0
+    if isinstance(outcome, Ok):
+        _log.info(
+            "mcp call terminal success",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "duration_ms": outcome.duration_ms,
+                "outcome": outcome.kind,
+                "arg_fingerprint": arg_fp,
+                "attempt": attempts,
+                "total_ms": total_ms,
+            },
+        )
+    elif isinstance(outcome, TransportError | TimeoutError) and attempts >= _RETRY_MAX_ATTEMPTS:
+        # Exhausted retries on a retriable class → warning with detail.
+        detail = getattr(outcome, "detail", "timeout")
+        _log.warning(
+            "mcp call terminal failure",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "duration_ms": outcome.duration_ms,
+                "outcome": outcome.kind,
+                "arg_fingerprint": arg_fp,
+                "attempt": attempts,
+                "total_ms": total_ms,
+                "detail": detail,
+            },
+        )
+    else:
+        _log.info(
+            "mcp call",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "duration_ms": outcome.duration_ms,
+                "outcome": outcome.kind,
+                "arg_fingerprint": arg_fp,
+                "attempt": attempts,
+                "total_ms": total_ms,
+            },
+        )
     return outcome
 
 
 # --- Internals -------------------------------------------------------------
+
+
+async def _call_with_retry_async(
+    server_name: str,
+    cfg: ServerConfig,
+    tool: str,
+    args: dict[str, Any],
+    timeout_s: float,
+    registry: Registry,
+    arg_fingerprint: str,
+) -> tuple[CallOutcome, int]:
+    """Wrap ``_call_with_validation_async`` with a bounded retry loop.
+
+    Retries ONLY ``TransportError`` and ``TimeoutError`` outcomes. Up to
+    ``_RETRY_MAX_ATTEMPTS`` total attempts with deterministic backoff
+    ``_RETRY_BACKOFFS_S`` between them (no jitter). Any non-retriable
+    outcome — ``Ok``, ``ToolExecutionError``, ``ProtocolError``,
+    ``SchemaValidationError`` — is returned on the attempt that produced it.
+
+    Returns ``(outcome, attempts)`` so the caller can log the final attempt
+    count alongside ``total_ms``.
+
+    Note: schema-validation short-circuits inside ``_call_with_validation_async``
+    before any network I/O, so a ``SchemaValidationError`` here is already
+    deterministic and retrying would never change the answer.
+    """
+    outcome: CallOutcome
+    for attempt in range(1, _RETRY_MAX_ATTEMPTS + 1):
+        outcome = await _call_with_validation_async(
+            server_name, cfg, tool, args, timeout_s, registry
+        )
+        if not isinstance(outcome, TransportError | TimeoutError):
+            return outcome, attempt
+        if attempt >= _RETRY_MAX_ATTEMPTS:
+            return outcome, attempt
+        # Retriable outcome + attempts remain → log transition + sleep.
+        backoff_s = _RETRY_BACKOFFS_S[attempt - 1]
+        _log.info(
+            "mcp call retry",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "arg_fingerprint": arg_fingerprint,
+                "attempt": attempt,
+                "backoff_ms": backoff_s * 1000.0,
+                "outcome_kind": type(outcome).__name__,
+            },
+        )
+        time.sleep(backoff_s)
+    # Unreachable: loop always returns. Kept for type-checker.
+    return outcome, _RETRY_MAX_ATTEMPTS
 
 
 async def _call_with_validation_async(

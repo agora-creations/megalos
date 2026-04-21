@@ -800,3 +800,249 @@ def test_validate_args_failure_formats_detail() -> None:
     assert detail is not None
     assert ":" in detail
 
+
+# --- Retry loop (TransportError + TimeoutError only) ----------------------
+#
+# Uses a clock-fake pattern mirroring tests/test_panel_throttle.py: fake
+# ``time.monotonic`` and ``time.sleep`` so retry spacing is asserted without
+# real wall-clock waits, and so retry backoffs advance the fake clock into
+# ``duration_ms`` computation deterministically.
+
+
+@pytest.fixture
+def fake_clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Mutable [now] container driving time.monotonic inside mcp_client."""
+    state = [0.0]
+    monkeypatch.setattr(mcp_client.time, "monotonic", lambda: state[0])
+    return state
+
+
+@pytest.fixture
+def sleep_log(
+    monkeypatch: pytest.MonkeyPatch, fake_clock: list[float]
+) -> list[float]:
+    """Replace time.sleep with a clock-advancing capture list."""
+    captured: list[float] = []
+
+    def fake_sleep(seconds: float) -> None:
+        captured.append(seconds)
+        fake_clock[0] += seconds
+
+    monkeypatch.setattr(mcp_client.time, "sleep", fake_sleep)
+    return captured
+
+
+def _script_validation_outcomes(
+    monkeypatch: pytest.MonkeyPatch, outcomes: list[CallOutcome]
+) -> list[int]:
+    """Replace ``_call_with_validation_async`` with a scripted sequence.
+
+    Each successive call pops the next outcome from ``outcomes``. Returns a
+    list used as a call counter so tests can assert attempt count.
+    """
+    call_counter: list[int] = []
+
+    async def _scripted(*_a: Any, **_kw: Any) -> CallOutcome:
+        call_counter.append(1)
+        return outcomes.pop(0)
+
+    monkeypatch.setattr(mcp_client, "_call_with_validation_async", _scripted)
+    return call_counter
+
+
+def test_retry_then_succeed_on_transport_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """First two attempts TransportError, third Ok; sleep_log == [0.2, 0.4]."""
+    outcomes: list[CallOutcome] = [
+        TransportError(detail="refused-1", duration_ms=0.0),
+        TransportError(detail="refused-2", duration_ms=0.0),
+        Ok(value="finally", duration_ms=0.0),
+    ]
+    counter = _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    with caplog.at_level(logging.DEBUG, logger="megalos_server.mcp"):
+        outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, Ok), outcome
+    assert outcome.value == "finally"
+    assert sleep_log == [0.2, 0.4]
+    assert len(counter) == 3
+    # Retry transitions + terminal success.
+    retry_records = [
+        r for r in caplog.records
+        if r.name == "megalos_server.mcp" and r.getMessage() == "mcp call retry"
+    ]
+    assert len(retry_records) == 2
+    assert retry_records[0].attempt == 1
+    assert retry_records[0].backoff_ms == 200.0
+    assert retry_records[0].outcome_kind == "TransportError"
+    assert retry_records[1].attempt == 2
+    assert retry_records[1].backoff_ms == 400.0
+    # arg_fingerprint threaded through every retry record.
+    fps = {r.arg_fingerprint for r in retry_records}
+    assert len(fps) == 1
+    assert len(next(iter(fps))) == 8
+    # Terminal success log carries total_ms + final attempt.
+    terminal = [
+        r for r in caplog.records
+        if r.getMessage() == "mcp call terminal success"
+    ]
+    assert len(terminal) == 1
+    assert terminal[0].attempt == 3
+    assert hasattr(terminal[0], "total_ms")
+
+
+def test_retry_then_succeed_on_timeout_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+) -> None:
+    """First two attempts TimeoutError, third Ok; sleep_log == [0.2, 0.4]."""
+    outcomes: list[CallOutcome] = [
+        McpTimeoutError(duration_ms=0.0),
+        McpTimeoutError(duration_ms=0.0),
+        Ok(value="ok", duration_ms=0.0),
+    ]
+    counter = _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, Ok), outcome
+    assert sleep_log == [0.2, 0.4]
+    assert len(counter) == 3
+
+
+def test_retry_exhausts_on_repeated_transport_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """All three attempts TransportError → terminal TransportError.
+
+    Three total attempts means two backoffs, so sleep_log == [0.2, 0.4].
+    Terminal record logged at WARNING with detail + final attempt.
+    """
+    outcomes: list[CallOutcome] = [
+        TransportError(detail="refused-a", duration_ms=0.0),
+        TransportError(detail="refused-b", duration_ms=0.0),
+        TransportError(detail="refused-c", duration_ms=0.0),
+    ]
+    counter = _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    with caplog.at_level(logging.DEBUG, logger="megalos_server.mcp"):
+        outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, TransportError), outcome
+    assert outcome.detail == "refused-c"
+    assert sleep_log == [0.2, 0.4]
+    assert len(counter) == 3
+    terminal = [
+        r for r in caplog.records
+        if r.getMessage() == "mcp call terminal failure"
+    ]
+    assert len(terminal) == 1
+    assert terminal[0].levelno == logging.WARNING
+    assert terminal[0].attempt == 3
+    assert terminal[0].detail == "refused-c"
+    assert hasattr(terminal[0], "total_ms")
+
+
+def test_no_retry_on_tool_execution_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+) -> None:
+    """ToolExecutionError is non-retriable: single attempt, no sleeps."""
+    outcomes: list[CallOutcome] = [
+        ToolExecutionError(message="boom", duration_ms=0.0),
+    ]
+    counter = _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, ToolExecutionError), outcome
+    assert sleep_log == []
+    assert len(counter) == 1
+
+
+def test_no_retry_on_schema_validation_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+) -> None:
+    """SchemaValidationError is non-retriable.
+
+    In practice the T01 short-circuit produces this before the retry loop
+    even sees a network call, but the loop must still treat it as terminal:
+    a rejecting validator is deterministic across attempts.
+    """
+    import jsonschema as _js
+
+    # Prime a rejecting validator so _call_with_validation_async produces
+    # SchemaValidationError locally, without any network I/O.
+    mcp_client._validator_cache[("stub", "echo")] = _js.Draft7Validator(
+        {
+            "type": "object",
+            "properties": {"value": {"type": "integer"}},
+            "required": ["value"],
+        }
+    )
+    # Also block _call_async so if the retry loop somehow retried, we'd see
+    # a loud failure rather than a silent re-validation.
+    async def _explode(*_a: Any, **_kw: Any) -> Any:
+        raise AssertionError("tools/call must not run on SchemaValidationError")
+
+    monkeypatch.setattr(mcp_client, "_call_async", _explode)
+
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "not-an-int"}, reg)
+    assert isinstance(outcome, SchemaValidationError), outcome
+    assert sleep_log == []
+
+
+def test_no_retry_on_protocol_error(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+) -> None:
+    """ProtocolError is non-retriable: single attempt, no sleeps."""
+    outcomes: list[CallOutcome] = [
+        ProtocolError(detail="bad envelope", duration_ms=0.0),
+    ]
+    counter = _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, ProtocolError), outcome
+    assert sleep_log == []
+    assert len(counter) == 1
+
+
+def test_retry_log_fields_present(
+    monkeypatch: pytest.MonkeyPatch,
+    fake_clock: list[float],
+    sleep_log: list[float],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Each retry transition carries attempt, backoff_ms, arg_fingerprint."""
+    outcomes: list[CallOutcome] = [
+        TransportError(detail="refused-1", duration_ms=0.0),
+        Ok(value="ok", duration_ms=0.0),
+    ]
+    _script_validation_outcomes(monkeypatch, outcomes)
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    with caplog.at_level(logging.INFO, logger="megalos_server.mcp"):
+        outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, Ok), outcome
+    retry_records = [
+        r for r in caplog.records if r.getMessage() == "mcp call retry"
+    ]
+    assert len(retry_records) == 1
+    rec = retry_records[0]
+    for field in ("attempt", "backoff_ms", "arg_fingerprint", "server", "tool", "outcome_kind"):
+        assert hasattr(rec, field), f"missing log field: {field}"
+    assert rec.attempt == 1
+    assert rec.backoff_ms == 200.0
+    assert rec.outcome_kind == "TransportError"
+    assert len(rec.arg_fingerprint) == 8
+
