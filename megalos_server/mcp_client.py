@@ -18,6 +18,30 @@ logger, carrying ``server``, ``tool``, ``duration_ms``, ``outcome``,
 ``arg_fingerprint`` (sha256 of sorted-key JSON of args, first 8 hex chars).
 One ``debug`` log with ``handshake_ms``. Raw args and raw result content
 are never logged.
+
+Arg-schema validation (call-time)
+---------------------------------
+Before each ``tools/call`` network round-trip, caller-supplied args are
+validated against the tool's ``inputSchema`` — pulled on first use via a
+``tools/list`` request and cached as a compiled ``jsonschema.Draft7Validator``
+in a module-global dict keyed by ``(server_name, tool_name)``.
+
+Cache policy: **process lifetime, no TTL, no invalidation.** A server schema
+change requires a megalos restart. Rationale:
+
+- Stale schemas are benign. If a server tightens a field, the cached
+  validator still accepts old args; the server then rejects the call and
+  surfaces as ``ToolExecutionError`` / ``SchemaValidationError`` — no data
+  corruption, no silent success.
+- Horizon scale-to-zero means megalos processes rarely outlive schema
+  staleness in practice; the first ``tools/call`` post-restart self-heals
+  the cache.
+- No TTL keeps the code obvious: one module-global dict, two helpers, zero
+  clock arithmetic. Three strikes before complexity.
+
+``jsonschema`` is already transitively pinned via ``fastmcp`` (which uses it
+for MCP protocol validation); this module is its first *direct* runtime use
+in megalos. No new dependency line in ``pyproject.toml``.
 """
 
 from __future__ import annotations
@@ -32,6 +56,7 @@ from dataclasses import dataclass
 from typing import Any, Union
 
 import httpx
+import jsonschema
 import mcp.types
 from fastmcp import Client
 from fastmcp.client.auth import BearerAuth
@@ -51,6 +76,14 @@ _DEFAULT_TIMEOUT_S: float = 30.0
 # server-side schema validation. Anything else from McpError is treated as
 # a generic protocol-level error — conservative default.
 _SCHEMA_ERROR_CODES: frozenset[int] = frozenset({mcp.types.INVALID_PARAMS})
+
+
+# Module-global per-process inputSchema validator cache. Keyed by
+# ``(server_name, tool_name)``; value is a compiled ``Draft7Validator``.
+# Populated on first successful fetch-and-compile for a pair; never evicted
+# or invalidated during a process's lifetime. See module docstring for
+# policy rationale.
+_validator_cache: dict[tuple[str, str], jsonschema.Draft7Validator] = {}
 
 
 # --- Outcome taxonomy ------------------------------------------------------
@@ -140,6 +173,12 @@ def call(
     Effective timeout = ``timeout`` param → ``ServerConfig.timeout_default`` →
     ``_DEFAULT_TIMEOUT_S``.
 
+    On first call for a given ``(server_name, tool)`` pair this also issues a
+    ``tools/list`` request to fetch the tool's ``inputSchema``, which is
+    compiled and cached for the process lifetime. Validation failures short-
+    circuit the ``tools/call`` network trip and surface as
+    ``SchemaValidationError``.
+
     Returns one of the ``CallOutcome`` variants; never raises for any
     expected error class (registry misses surface as ``UnknownServer`` from
     ``registry.get`` — not caught here, caller's responsibility).
@@ -154,7 +193,11 @@ def call(
     arg_fp = _arg_fingerprint(args)
     start = time.monotonic()
     try:
-        outcome = asyncio.run(_call_async(cfg, tool, args, effective_timeout))
+        outcome = asyncio.run(
+            _call_with_validation_async(
+                server_name, cfg, tool, args, effective_timeout, registry
+            )
+        )
     except Exception as exc:  # noqa: BLE001 — conservative catch-all
         duration_ms = (time.monotonic() - start) * 1000.0
         _log.exception(
@@ -177,6 +220,174 @@ def call(
 
 
 # --- Internals -------------------------------------------------------------
+
+
+async def _call_with_validation_async(
+    server_name: str,
+    cfg: ServerConfig,
+    tool: str,
+    args: dict[str, Any],
+    timeout_s: float,
+    registry: Registry,
+) -> CallOutcome:
+    """Cache-miss fetch + compile, then validate args, then ``tools/call``.
+
+    On cache miss: issue ``tools/list``, locate the tool, compile its
+    ``inputSchema`` into a ``Draft7Validator``, then write the cache entry.
+    Fetch transport errors → ``TransportError`` (cache NOT written, next
+    call retries). Malformed server schema → ``ProtocolError``.
+
+    On cache hit or after miss-resolution: validate args. Failure →
+    ``SchemaValidationError`` (no ``tools/call`` round-trip). Success →
+    delegate to ``_call_async`` for the actual tool invocation.
+    """
+    start = time.monotonic()
+    key = (server_name, tool)
+
+    validator = _validator_cache.get(key)
+    if validator is None:
+        fetch_start = time.monotonic()
+        try:
+            schema = await _fetch_input_schema(server_name, tool, registry, timeout_s)
+        except _SchemaFetchTransportError as exc:
+            return TransportError(
+                detail=exc.detail,
+                duration_ms=(time.monotonic() - start) * 1000.0,
+            )
+        except _SchemaFetchProtocolError as exc:
+            return ProtocolError(
+                detail=exc.detail,
+                duration_ms=(time.monotonic() - start) * 1000.0,
+            )
+        fetch_ms = (time.monotonic() - fetch_start) * 1000.0
+        try:
+            validator = jsonschema.Draft7Validator(schema)
+        except jsonschema.exceptions.SchemaError as exc:
+            return ProtocolError(
+                detail=f"server inputSchema invalid: {exc.message}",
+                duration_ms=(time.monotonic() - start) * 1000.0,
+            )
+        _validator_cache[key] = validator
+        _log.debug(
+            "mcp inputschema fetch",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "cache_hit": False,
+                "inputschema_fetch_ms": fetch_ms,
+            },
+        )
+    else:
+        _log.debug(
+            "mcp inputschema fetch",
+            extra={
+                "server": server_name,
+                "tool": tool,
+                "cache_hit": True,
+                "inputschema_fetch_ms": 0.0,
+            },
+        )
+
+    validation_outcome = _validate_args(validator, args)
+    if validation_outcome is not None:
+        return SchemaValidationError(
+            detail=validation_outcome,
+            duration_ms=(time.monotonic() - start) * 1000.0,
+        )
+
+    return await _call_async(cfg, tool, args, timeout_s)
+
+
+class _SchemaFetchTransportError(Exception):
+    """Signals ``tools/list`` could not reach the server (no cache write)."""
+
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(detail)
+
+
+class _SchemaFetchProtocolError(Exception):
+    """Signals the server's ``tools/list`` response was malformed."""
+
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+        super().__init__(detail)
+
+
+async def _fetch_input_schema(
+    server_name: str,
+    tool_name: str,
+    registry: Registry,
+    timeout_s: float,
+) -> dict[str, Any]:
+    """Issue ``tools/list`` and return ``tool_name``'s ``inputSchema``.
+
+    Classifies failures for the caller by raising a private exception:
+    transport/unreachable → ``_SchemaFetchTransportError``;
+    protocol-level malformed schema → ``_SchemaFetchProtocolError``.
+    """
+    cfg = registry.get(server_name)
+    token = os.environ.get(cfg.auth.token_env)
+    if token is None:
+        raise _SchemaFetchTransportError(
+            f"auth env var ${cfg.auth.token_env} not set"
+        )
+
+    try:
+        client = Client(cfg.url, auth=BearerAuth(token), timeout=timeout_s)
+        async with client:
+            tools = await asyncio.wait_for(client.list_tools(), timeout=timeout_s)
+    except (asyncio.TimeoutError, httpx.TimeoutException) as exc:
+        raise _SchemaFetchTransportError(
+            f"tools/list timed out for {cfg.url}: {exc}"
+        ) from exc
+    except httpx.HTTPError as exc:
+        raise _SchemaFetchTransportError(
+            f"tools/list http error for {cfg.url}: {exc}"
+        ) from exc
+    except RuntimeError as exc:
+        cause = exc.__cause__
+        if isinstance(cause, httpx.HTTPError | asyncio.TimeoutError):
+            raise _SchemaFetchTransportError(
+                f"tools/list connect error for {cfg.url}: {cause}"
+            ) from exc
+        msg = str(exc)
+        if "failed to connect" in msg.lower() or "connection" in msg.lower():
+            raise _SchemaFetchTransportError(
+                f"tools/list connect error for {cfg.url}: {msg}"
+            ) from exc
+        raise
+    except McpError as exc:
+        raise _SchemaFetchProtocolError(
+            f"server inputSchema invalid: mcp error {exc}"
+        ) from exc
+
+    match = next((t for t in tools if t.name == tool_name), None)
+    if match is None:
+        raise _SchemaFetchProtocolError(
+            f"server inputSchema invalid: tool {tool_name!r} not listed"
+        )
+
+    schema = match.inputSchema
+    if not isinstance(schema, dict) or "type" not in schema:
+        raise _SchemaFetchProtocolError(
+            f"server inputSchema invalid: not a dict with 'type' "
+            f"(got {type(schema).__name__})"
+        )
+    return schema
+
+
+def _validate_args(
+    validator: jsonschema.Draft7Validator, args: dict[str, Any]
+) -> str | None:
+    """Run ``validator.validate(args)``. Returns a formatted detail string on
+    failure, or ``None`` on success.
+    """
+    try:
+        validator.validate(args)
+    except jsonschema.ValidationError as exc:
+        return f"{exc.json_path}: {exc.message}"
+    return None
 
 
 async def _call_async(

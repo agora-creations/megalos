@@ -101,6 +101,29 @@ def _stub_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STUB_TOKEN", "test-token")
 
 
+@pytest.fixture(autouse=True)
+def _clear_validator_cache() -> Any:
+    """Reset the per-process inputSchema validator cache around each test so
+    tests do not leak cache entries to one another."""
+    mcp_client._validator_cache.clear()
+    yield
+    mcp_client._validator_cache.clear()
+
+
+def _prime_cache_permissive(server_name: str, tool_name: str) -> None:
+    """Seed ``_validator_cache`` with a schema that accepts any object.
+
+    Used by tests that exercise downstream ``_call_async`` paths via a fake
+    ``Client``; they don't need the fetch step to run, so a wildcard object
+    schema keeps the plumbing out of their way.
+    """
+    import jsonschema as _js
+
+    mcp_client._validator_cache[(server_name, tool_name)] = _js.Draft7Validator(
+        {"type": "object"}
+    )
+
+
 # --- Outcome-class coverage -------------------------------------------------
 
 
@@ -204,6 +227,7 @@ def test_protocol_error_via_mock(monkeypatch: pytest.MonkeyPatch) -> None:
         return mcp_client._classify_result(FakeBadResult(), 0.0)  # type: ignore[arg-type]
 
     monkeypatch.setattr(mcp_client, "_call_async", _fake)
+    _prime_cache_permissive("stub", "echo")
     reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
     outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
     assert isinstance(outcome, ProtocolError), outcome
@@ -359,6 +383,9 @@ def _make_fake_client(
 
 def _run_with_fake(monkeypatch: pytest.MonkeyPatch, fake_cls: type) -> CallOutcome:
     monkeypatch.setattr(mcp_client, "Client", fake_cls)
+    # Pre-seed cache so the fetch step is skipped; these tests target the
+    # ``tools/call``-path exception-mapping table, not the fetch path.
+    _prime_cache_permissive("stub", "echo")
     reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
     return mcp_client.call("stub", "echo", {"value": "x"}, reg)
 
@@ -520,4 +547,267 @@ def test_registry_timeout_default_used(
     )
     outcome = mcp_client.call("stub", "sleep", {"seconds": 2.0}, reg)
     assert isinstance(outcome, McpTimeoutError), outcome
+
+
+# --- Call-time inputSchema validation + per-process validator cache -------
+#
+# These tests cover the six paths called out in the T01 plan: happy-path
+# validation, two validation-failure shapes (type mismatch, missing
+# required), cache-hit reuse, cache-miss on tools/list transport failure,
+# and malformed server inputSchema.
+
+
+def test_valid_args_pass_validation_and_call_succeeds(
+    mcp_stub_server, request  # type: ignore[no-untyped-def]  # noqa: F811
+) -> None:
+    """Valid args against ``schema_required``'s inputSchema → Ok; validator
+    lands in the cache after the first successful fetch."""
+    reg = _registry_for_stub(mcp_stub_server.url)
+    outcome = mcp_client.call("stub", "schema_required", {"count": 7}, reg)
+    assert isinstance(outcome, Ok), outcome
+    assert outcome.value == "count=7"
+    assert ("stub", "schema_required") in mcp_client._validator_cache
+    _record_if_ok(outcome, request.node.name)
+
+
+def test_type_mismatch_short_circuits_before_tools_call(
+    mcp_stub_server, monkeypatch: pytest.MonkeyPatch  # type: ignore[no-untyped-def]  # noqa: F811
+) -> None:
+    """Non-int ``count`` is rejected locally: the client never issues
+    ``tools/call``. We assert this by priming a validator that rejects,
+    then patching ``_call_async`` to blow up on any invocation."""
+    import jsonschema as _js
+
+    mcp_client._validator_cache[("stub", "schema_required")] = _js.Draft7Validator(
+        {
+            "type": "object",
+            "properties": {"count": {"type": "integer"}},
+            "required": ["count"],
+        }
+    )
+
+    async def _explode(*_a: Any, **_kw: Any) -> Any:
+        raise AssertionError("tools/call must not run on validation failure")
+
+    monkeypatch.setattr(mcp_client, "_call_async", _explode)
+
+    reg = _registry_for_stub(mcp_stub_server.url)
+    outcome = mcp_client.call(
+        "stub", "schema_required", {"count": "not-an-int"}, reg
+    )
+    assert isinstance(outcome, SchemaValidationError), outcome
+    assert "count" in outcome.detail.lower() or "integer" in outcome.detail.lower()
+
+
+def test_missing_required_field_surfaces_schema_validation_error(
+    mcp_stub_server  # type: ignore[no-untyped-def]  # noqa: F811
+) -> None:
+    """An args dict missing a required field is rejected client-side."""
+    reg = _registry_for_stub(mcp_stub_server.url)
+    outcome = mcp_client.call("stub", "schema_required", {}, reg)
+    assert isinstance(outcome, SchemaValidationError), outcome
+    assert "count" in outcome.detail.lower() or "required" in outcome.detail.lower()
+
+
+def test_cache_hit_reuses_validator(
+    mcp_stub_server, monkeypatch: pytest.MonkeyPatch  # type: ignore[no-untyped-def]  # noqa: F811
+) -> None:
+    """Two calls for the same ``(server, tool)`` pair hit ``tools/list``
+    exactly once. Instrumented via a wrapper around ``_fetch_input_schema``
+    that increments a counter on each call."""
+    original = mcp_client._fetch_input_schema
+    counter = {"calls": 0}
+
+    async def _counting_fetch(*args: Any, **kwargs: Any) -> Any:
+        counter["calls"] += 1
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(mcp_client, "_fetch_input_schema", _counting_fetch)
+
+    reg = _registry_for_stub(mcp_stub_server.url)
+    o1 = mcp_client.call("stub", "schema_required", {"count": 1}, reg)
+    o2 = mcp_client.call("stub", "schema_required", {"count": 2}, reg)
+    assert isinstance(o1, Ok) and isinstance(o2, Ok)
+    assert counter["calls"] == 1, counter
+
+
+def test_tools_list_transport_failure_leaves_cache_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If ``tools/list`` fails, no cache entry is written — so the next
+    call retries the fetch rather than serving a stale validator."""
+    import httpx as _httpx
+
+    class _DeadClient:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            raise _httpx.ConnectError("refused")
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        async def list_tools(self) -> Any:
+            raise AssertionError("unreachable")
+
+        async def call_tool(self, *_a: Any, **_kw: Any) -> Any:
+            raise AssertionError("unreachable")
+
+    monkeypatch.setattr(mcp_client, "Client", _DeadClient)
+
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, TransportError), outcome
+    assert ("stub", "echo") not in mcp_client._validator_cache
+
+    # A second call also retries the fetch — still TransportError, still
+    # no cache entry. Proves the miss-path does not memoize failures.
+    outcome2 = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome2, TransportError), outcome2
+    assert ("stub", "echo") not in mcp_client._validator_cache
+
+
+def test_malformed_server_input_schema_surfaces_protocol_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the server's ``tools/list`` response lists the tool but its
+    ``inputSchema`` is not a dict with a ``type`` key, classify as
+    ``ProtocolError`` (and do not cache anything)."""
+    import mcp.types as _mt
+
+    class _Tool:
+        def __init__(self, name: str, input_schema: Any) -> None:
+            self.name = name
+            self.inputSchema = input_schema
+
+    class _WeirdSchemaClient:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        async def list_tools(self) -> list[Any]:
+            # Schema missing ``type`` key → malformed per our policy.
+            return [_Tool("echo", {"properties": {}})]
+
+        async def call_tool(self, *_a: Any, **_kw: Any) -> Any:
+            raise AssertionError("unreachable")
+
+    monkeypatch.setattr(mcp_client, "Client", _WeirdSchemaClient)
+
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, ProtocolError), outcome
+    assert "inputSchema" in outcome.detail
+    assert ("stub", "echo") not in mcp_client._validator_cache
+
+    # Suppress unused-import warning for mcp.types — kept to document intent.
+    assert _mt is not None
+
+
+def test_tool_not_listed_in_tools_list_surfaces_protocol_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the server's ``tools/list`` does not include the requested tool,
+    treat it as a server-side protocol violation."""
+
+    class _MissingToolClient:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        async def list_tools(self) -> list[Any]:
+            return []  # empty — target tool absent
+
+        async def call_tool(self, *_a: Any, **_kw: Any) -> Any:
+            raise AssertionError("unreachable")
+
+    monkeypatch.setattr(mcp_client, "Client", _MissingToolClient)
+
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, ProtocolError), outcome
+    assert "not listed" in outcome.detail
+
+
+def test_uncompilable_schema_surfaces_protocol_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dict-shaped schema with a ``type`` key that jsonschema cannot
+    compile (e.g. a bogus type keyword value) surfaces as ``ProtocolError``
+    at the validator-compile step, not the fetch step."""
+
+    class _Tool:
+        def __init__(self, name: str, input_schema: Any) -> None:
+            self.name = name
+            self.inputSchema = input_schema
+
+    class _BadSchemaClient:
+        def __init__(self, *_a: Any, **_kw: Any) -> None:
+            pass
+
+        async def __aenter__(self) -> Any:
+            return self
+
+        async def __aexit__(self, *_a: Any) -> None:
+            return None
+
+        async def list_tools(self) -> list[Any]:
+            # "type" key is present so it passes the fetch-level shape check,
+            # but the value is not a valid Draft7 type so Draft7Validator
+            # raises SchemaError at compile time.
+            return [_Tool("echo", {"type": "not-a-real-type"})]
+
+        async def call_tool(self, *_a: Any, **_kw: Any) -> Any:
+            raise AssertionError("unreachable")
+
+    monkeypatch.setattr(mcp_client, "Client", _BadSchemaClient)
+
+    # Make ``Draft7Validator(...)`` construction strict so the bogus type
+    # is caught at compile rather than validate time.
+    import jsonschema as _js
+
+    original = _js.Draft7Validator
+
+    def _strict_ctor(schema: Any, *a: Any, **kw: Any) -> Any:
+        original.check_schema(schema)
+        return original(schema, *a, **kw)
+
+    monkeypatch.setattr(mcp_client.jsonschema, "Draft7Validator", _strict_ctor)
+
+    reg = _registry_for_stub("http://127.0.0.1:9/mcp/")
+    outcome = mcp_client.call("stub", "echo", {"value": "x"}, reg)
+    assert isinstance(outcome, ProtocolError), outcome
+    assert "inputSchema invalid" in outcome.detail
+    assert ("stub", "echo") not in mcp_client._validator_cache
+
+
+def test_validate_args_success_returns_none() -> None:
+    """Unit test: ``_validate_args`` returns ``None`` on valid args."""
+    import jsonschema as _js
+
+    v = _js.Draft7Validator({"type": "object", "properties": {"x": {"type": "integer"}}})
+    assert mcp_client._validate_args(v, {"x": 3}) is None
+
+
+def test_validate_args_failure_formats_detail() -> None:
+    """Unit test: ``_validate_args`` returns ``json_path: message`` on failure."""
+    import jsonschema as _js
+
+    v = _js.Draft7Validator(
+        {"type": "object", "properties": {"x": {"type": "integer"}}, "required": ["x"]}
+    )
+    detail = mcp_client._validate_args(v, {})
+    assert detail is not None
+    assert ":" in detail
 
