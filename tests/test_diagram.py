@@ -175,3 +175,69 @@ def test_non_mcp_steps_keep_rectangle_shape(fixture: Path) -> None:
         sid = step["id"]
         assert f'{sid}["' in out
         assert f"{sid}[[" not in out
+
+
+# --- Precondition rendering -------------------------------------------------
+
+# skip_continue.yaml picked as the precondition-without-branches fixture:
+# three steps, one precondition, no branches — the simplest shape in the
+# candidate set {cascade_error, cascade_wrap_child, force_branch_override,
+# inject_skipped, revise_unskip, skip_continue}. Verified by reading the
+# file before locking in.
+PRECONDITION_FIXTURES = [
+    FIXTURES / "precondition_with_branches.yaml",
+    FIXTURES / "skip_continue.yaml",
+]
+
+
+@pytest.mark.parametrize("fixture", PRECONDITION_FIXTURES, ids=lambda p: p.name)
+def test_precondition_steps_have_dotted_edge(fixture: Path) -> None:
+    """Any step carrying ``precondition`` triggers a dotted edge
+    (Mermaid ``-. … .->``) in the rendered output."""
+    doc = yaml.safe_load(fixture.read_text())
+    out = render(fixture)
+    has_precondition = any(
+        isinstance(s, dict) and "precondition" in s for s in doc["steps"]
+    )
+    if has_precondition:
+        assert "-." in out and ".->" in out
+
+
+@pytest.mark.parametrize("fixture", PRECONDITION_FIXTURES, ids=lambda p: p.name)
+def test_precondition_condition_summary_appears_in_label(fixture: Path) -> None:
+    """The condition summary (``when <last_seg> == <value>`` or
+    ``when <last_seg> present``) appears verbatim somewhere in the
+    rendered output for every precondition-carrying step."""
+    doc = yaml.safe_load(fixture.read_text())
+    out = render(fixture)
+    for step in doc["steps"]:
+        pre = step.get("precondition") if isinstance(step, dict) else None
+        if not pre:
+            continue
+        if "when_equals" in pre:
+            ref = pre["when_equals"]["ref"]
+            last_seg = ref.split(".")[-1]
+            assert f"when {last_seg} ==" in out
+        elif "when_present" in pre:
+            ref = pre["when_present"]
+            last_seg = ref.split(".")[-1]
+            assert f"when {last_seg} present" in out
+
+
+@pytest.mark.parametrize("fixture", PRECONDITION_FIXTURES, ids=lambda p: p.name)
+def test_precondition_dotted_edge_source_matches_ref(fixture: Path) -> None:
+    """The dotted edge runs from the ref's source step (second dot-segment
+    of the ``step_data.<sid>...`` path) to the gated step."""
+    doc = yaml.safe_load(fixture.read_text())
+    out = render(fixture)
+    for step in doc["steps"]:
+        pre = step.get("precondition") if isinstance(step, dict) else None
+        if not pre:
+            continue
+        ref = (
+            pre["when_equals"]["ref"] if "when_equals" in pre else pre["when_present"]
+        )
+        source_sid = ref.split(".")[1]
+        gated_sid = step["id"]
+        assert f"{source_sid} -." in out
+        assert f".-> {gated_sid}" in out
