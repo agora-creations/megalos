@@ -18,6 +18,7 @@ EXPECTED_COLUMNS = {
     "completed_at": "TEXT",
     "called_session": "TEXT",
     "parent_session_id": "TEXT",
+    "workflow_fingerprint": "TEXT",
 }
 
 
@@ -73,3 +74,31 @@ def test_transaction_rolls_back_on_exception():
     conn = db._get_conn()
     rows = conn.execute("SELECT session_id FROM sessions WHERE session_id=?", ("s-rollback",)).fetchall()
     assert rows == []
+
+
+def test_fingerprint_column_migration_is_idempotent_with_backfill():
+    """init_schema adds the workflow_fingerprint column on first run and is a
+    no-op on re-run. Pre-existing rows (simulated by inserting before the
+    migration has taken effect is impossible here — :memory: starts empty —
+    so this test focuses on the idempotency + NOT NULL DEFAULT sentinel,
+    which together give the backfill behaviour pre-versioning sessions
+    rely on). Companion test ``test_workflow_fingerprint ::
+    test_pre_versioning_backfill_on_legacy_db`` covers the genuine
+    pre-column-row case."""
+    db.init_schema()
+    db.init_schema()
+    cols = _column_info()
+    assert cols == EXPECTED_COLUMNS
+    # Insert a row through the raw sqlite API without specifying the
+    # fingerprint column — the NOT NULL DEFAULT must supply the sentinel.
+    conn = db._get_conn()
+    conn.execute(
+        "INSERT INTO sessions (session_id, workflow_type, current_step, "
+        "created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+        ("s-default", "wf", "step1", "2026-01-01", "2026-01-01"),
+    )
+    row = conn.execute(
+        "SELECT workflow_fingerprint FROM sessions WHERE session_id=?",
+        ("s-default",),
+    ).fetchone()
+    assert row == ("pre-versioning",)

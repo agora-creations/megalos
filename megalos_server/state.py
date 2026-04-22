@@ -17,6 +17,11 @@ from .identity import ANONYMOUS_IDENTITY
 from .session_canon import normalize_session_id
 
 COMPLETE = "__complete__"
+# Terminal sentinel for sessions whose workflow YAML changed under them.
+# Reserved for T02 (ADR-001 activation); no code in T01 writes this value.
+# Introduced here so the vocabulary is available to callers even while
+# the runtime detection path is still dormant.
+WORKFLOW_CHANGED = "__workflow_changed__"
 
 _log = logging.getLogger("megalos_server.state")
 
@@ -98,6 +103,7 @@ def _row_to_session(row: tuple) -> dict:
         "updated_at": row[9],
         "called_session": row[10],
         "parent_session_id": row[11],
+        "workflow_fingerprint": row[12],
     }
 
 
@@ -105,7 +111,7 @@ def _row_to_session(row: tuple) -> dict:
 _SELECT_COLS = (
     "session_id, workflow_type, current_step, step_data, retry_counts, "
     "step_visit_counts, escalation, artifact_checkpoints, created_at, updated_at, "
-    "called_session, parent_session_id"
+    "called_session, parent_session_id, workflow_fingerprint"
 )
 
 
@@ -116,6 +122,8 @@ def create_session(
     frame_type: str = "call",
     call_step_id: str | None = None,
     max_stack_depth: int | None = None,
+    *,
+    workflow_fingerprint: str = "pre-versioning",
 ) -> str:
     """Create a new session. Returns session ID.
 
@@ -144,6 +152,17 @@ def create_session(
     of frames above root = stack_depth(root_session_id) return value.
     Lone session = depth 0; one push = depth 1; at depth N==max_stack_depth,
     the next push is rejected.
+
+    workflow_fingerprint: ADR-001 fingerprint snapshot stamped onto the new
+    row. Production call sites (the three create_session calls in
+    ``tools.py`` — ``start_workflow``, ``enter_sub_workflow``, ``push_flow``)
+    resolve this from the in-memory fingerprints map populated at
+    ``create_app`` time. The ``"pre-versioning"`` default exists so
+    state-layer unit tests that exercise cap/TTL/concurrency primitives do
+    not have to thread a fake fingerprint through every call — those
+    sessions are synthetic and have no real workflow to anchor against.
+    Keyword-only so callers cannot confuse it with ``workflow_type`` at
+    the positional boundary. Dormant in T01 — no code reads the column.
     """
     if parent_session_id is not None:
         parent_session_id = normalize_session_id(parent_session_id)
@@ -182,9 +201,21 @@ def create_session(
             "INSERT INTO sessions (session_id, workflow_type, current_step, "
             "step_data, retry_counts, step_visit_counts, escalation, "
             "artifact_checkpoints, created_at, updated_at, completed_at, "
-            "called_session, parent_session_id) "
-            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, ?)",
-            (sid, workflow_type, current_step, empty, empty, empty, empty, now, now, parent_session_id),
+            "called_session, parent_session_id, workflow_fingerprint) "
+            "VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, NULL, NULL, ?, ?)",
+            (
+                sid,
+                workflow_type,
+                current_step,
+                empty,
+                empty,
+                empty,
+                empty,
+                now,
+                now,
+                parent_session_id,
+                workflow_fingerprint,
+            ),
         )
         if parent_session_id is not None:
             # Locate the parent's root + depth so this child lands one level deeper.
@@ -295,7 +326,16 @@ def list_sessions() -> list[dict]:
     stack_by_sid = {r[0]: (r[1], int(r[2])) for r in stack_rows}
     result = []
     for row in rows:
-        status = "completed" if row[2] == COMPLETE else "active"
+        # Status vocabulary is additive for T01: 'workflow_changed' is
+        # reachable by row-content, but no code path in T01 writes the
+        # WORKFLOW_CHANGED sentinel into current_step. T02's activation
+        # of ADR-001 is what first populates this branch.
+        if row[2] == COMPLETE:
+            status = "completed"
+        elif row[2] == WORKFLOW_CHANGED:
+            status = "workflow_changed"
+        else:
+            status = "active"
         sid = row[0]
         if sid in stack_by_sid:
             root_sid, depth = stack_by_sid[sid]

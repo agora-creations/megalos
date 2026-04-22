@@ -1,5 +1,7 @@
 """YAML workflow schema parsing."""
 
+import hashlib
+import json
 import os
 import re
 from typing import TYPE_CHECKING
@@ -12,6 +14,40 @@ from .errors import YAML_MAX
 
 if TYPE_CHECKING:
     from .mcp_registry import Registry
+
+
+def workflow_fingerprint(raw_yaml: str) -> str:
+    """Return the canonical SHA-256 fingerprint of a workflow YAML string.
+
+    Algorithm (fixed by ``docs/adr/001-workflow-versioning.md``):
+
+        sha256(
+            json.dumps(
+                yaml.safe_load(raw_yaml),
+                sort_keys=True,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+    Load-then-canonical-JSON is a deliberate choice. Reducing the YAML to
+    its parsed Python data structure before hashing sidesteps every
+    cosmetic YAML formatting quirk (comments, quote style, flow vs. block,
+    anchors, line endings): two YAML files that parse to the same object
+    produce the same fingerprint; two files that parse differently
+    produce different ones. A comment-only edit therefore does not trip
+    the fingerprint (no runtime-significant change), while any edit that
+    reaches the parsed object — step rename, directive template edit,
+    branch target change, ``schema_version`` bump — does.
+    """
+    parsed = yaml.safe_load(raw_yaml)
+    canonical = json.dumps(
+        parsed,
+        sort_keys=True,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
 
 
 REQUIRED_STEP_KEYS = {"id", "title", "directive_template", "gates", "anti_patterns"}
