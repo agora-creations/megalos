@@ -33,6 +33,13 @@ def test_dryrun_import_allowlist() -> None:
                 elif top not in ALLOWED_STDLIB:
                     offenders.append(f"import {alias.name}")
         elif isinstance(node, ast.ImportFrom):
+            if node.level > 0:
+                # Relative imports (``from . import X``, ``from .tools import Y``)
+                # bypass absolute-path classification — reject outright, no
+                # legitimate use in dryrun.py.
+                names = ", ".join(alias.name for alias in node.names)
+                offenders.append(f"from {'.' * node.level}{node.module or ''} import {names}")
+                continue
             module = node.module or ""
             if module == "megalos_server":
                 for alias in node.names:
