@@ -1,0 +1,138 @@
+[
+  {
+    "call": "start_workflow",
+    "response": {
+      "context": "replay-diff",
+      "conversation_repair": {
+        "on_cancel": "Confirm cancellation, then use delete_session",
+        "on_clarification": "Re-explain the current step's directive more simply",
+        "on_digression": "Acknowledge, then redirect to current step",
+        "on_go_back": "Guide the user to use revise_step"
+      },
+      "current_step": {
+        "id": "alpha",
+        "title": "Alpha"
+      },
+      "directive": "First step. Do NOT skip ahead. Stub directive for tests.",
+      "do_not": [
+        "Do NOT skip ahead to later steps.",
+        "Do NOT produce final artifacts yet.",
+        "Do NOT ask multiple questions at once.",
+        "Do NOT proceed until all gates for this step are satisfied.",
+        "Do NOT submit a step without showing your work to the user and waiting for their confirmation. Each step is a conversation, not a task you complete silently.",
+        "Do NOT submit multiple steps in a single response. Complete ONE step, present it, wait for the user to respond, then move to the next.",
+        "Do NOT reveal step names, step numbers, or internal workflow mechanics to the user. The workflow should feel like a natural conversation, not a numbered checklist. Never say things like 'Step 2: Decompose and Structure' or 'we are now in the plan phase'."
+      ],
+      "gates": [
+        "done"
+      ],
+      "session_id": "<SESSION_ID>",
+      "workflow_type": "canonical"
+    }
+  },
+  {
+    "call": "get_state",
+    "response": {
+      "current_step": {
+        "id": "alpha",
+        "title": "Alpha"
+      },
+      "pending_steps": [
+        "Bravo",
+        "Charlie"
+      ],
+      "progress": "step 1 of 3",
+      "session_id": "<SESSION_ID>",
+      "stack": [],
+      "step_data": {},
+      "workflow_type": "canonical"
+    }
+  },
+  {
+    "call": "submit_step_alpha",
+    "response": {
+      "conversation_repair": {
+        "on_cancel": "Confirm cancellation, then use delete_session",
+        "on_clarification": "Re-explain the current step's directive more simply",
+        "on_digression": "Acknowledge, then redirect to current step",
+        "on_go_back": "Guide the user to use revise_step"
+      },
+      "directive": "Middle step. Do NOT skip ahead. Stub directive for tests.",
+      "do_not": [
+        "Do NOT skip ahead to later steps.",
+        "Do NOT produce final artifacts yet.",
+        "Do NOT ask multiple questions at once.",
+        "Do NOT proceed until all gates for this step are satisfied.",
+        "Do NOT submit a step without showing your work to the user and waiting for their confirmation. Each step is a conversation, not a task you complete silently.",
+        "Do NOT submit multiple steps in a single response. Complete ONE step, present it, wait for the user to respond, then move to the next.",
+        "Do NOT reveal step names, step numbers, or internal workflow mechanics to the user. The workflow should feel like a natural conversation, not a numbered checklist. Never say things like 'Step 2: Decompose and Structure' or 'we are now in the plan phase'."
+      ],
+      "gates": [
+        "done"
+      ],
+      "next_step": {
+        "id": "bravo",
+        "title": "Bravo"
+      },
+      "progress": "step 1 of 3 complete",
+      "session_id": "<SESSION_ID>",
+      "submitted": {
+        "id": "alpha",
+        "title": "Alpha"
+      }
+    }
+  },
+  {
+    "call": "get_state_after_alpha",
+    "response": {
+      "current_step": {
+        "id": "bravo",
+        "title": "Bravo"
+      },
+      "pending_steps": [
+        "Charlie"
+      ],
+      "progress": "step 2 of 3",
+      "session_id": "<SESSION_ID>",
+      "stack": [],
+      "step_data": {
+        "alpha": "alpha done"
+      },
+      "workflow_type": "canonical"
+    }
+  },
+  {
+    "call": "submit_step_bravo",
+    "response": {
+      "conversation_repair": {
+        "on_cancel": "Confirm cancellation, then use delete_session",
+        "on_clarification": "Re-explain the current step's directive more simply",
+        "on_digression": "Acknowledge, then redirect to current step",
+        "on_go_back": "Guide the user to use revise_step"
+      },
+      "directive": "Final step. Do NOT skip ahead. Stub directive for tests.",
+      "do_not": [
+        "Do NOT skip ahead to later steps.",
+        "Do NOT produce final artifacts yet.",
+        "Do NOT ask multiple questions at once.",
+        "Do NOT proceed until all gates for this step are satisfied.",
+        "Do NOT submit a step without showing your work to the user and waiting for their confirmation. Each step is a conversation, not a task you complete silently.",
+        "Do NOT submit multiple steps in a single response. Complete ONE step, present it, wait for the user to respond, then move to the next.",
+        "Do NOT reveal step names, step numbers, or internal workflow mechanics to the user. The workflow should feel like a natural conversation, not a numbered checklist. Never say things like 'Step 2: Decompose and Structure' or 'we are now in the plan phase'."
+      ],
+      "gates": [
+        "done"
+      ],
+      "next_step": {
+        "id": "charlie",
+        "title": "Charlie"
+      },
+      "progress": "step 2 of 3 complete",
+      "session_id": "<SESSION_ID>",
+      "submitted": {
+        "id": "bravo",
+        "title": "Bravo"
+      }
+    }
+  }
+]

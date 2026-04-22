@@ -11,7 +11,11 @@ from megalos_server.middleware import (
     ValidationErrorMiddleware,
 )
 from megalos_server.ratelimit import RateLimitConfig, RateLimiter
-from megalos_server.schema import load_workflow, validate_workflow_calls
+from megalos_server.schema import (
+    load_workflow,
+    validate_workflow_calls,
+    workflow_fingerprint,
+)
 from megalos_server.tools import register_tools
 
 
@@ -47,9 +51,15 @@ def create_app(
     wf_path = Path(workflow_dir) if workflow_dir else Path(__file__).parent / "workflows"
     registry = _load_registry(registry_path)
     workflows: dict[str, dict] = {}
+    # Fingerprints are held lockstep with the workflows dict and computed
+    # from the raw YAML bytes (see docs/adr/001-workflow-versioning.md).
+    # Dormant in T01 — stamped onto sessions but not read back.
+    workflow_fingerprints: dict[str, str] = {}
     for yaml_path in wf_path.glob("*.yaml"):
         wf = load_workflow(str(yaml_path), registry=registry)
+        raw = Path(yaml_path).read_text(encoding="utf-8")
         workflows[wf["name"]] = wf
+        workflow_fingerprints[wf["name"]] = workflow_fingerprint(raw)
     # Cross-workflow validation: call targets exist and the call graph is acyclic.
     call_errors = validate_workflow_calls(workflows)
     if call_errors:
@@ -64,9 +74,12 @@ def create_app(
     # the session axis. Primitive is constructed from env-var config.
     limiter = RateLimiter(RateLimitConfig.from_env())
     mcp.add_middleware(RateLimitMiddleware(limiter))  # type: ignore[attr-defined]
-    register_tools(mcp, workflows, registry=registry)
+    register_tools(
+        mcp, workflows, workflow_fingerprints=workflow_fingerprints, registry=registry
+    )
     # Attach workflows dict for introspection / test mutation. Underscore = private.
     mcp._megalos_workflows = workflows  # type: ignore[attr-defined]
+    mcp._megalos_workflow_fingerprints = workflow_fingerprints  # type: ignore[attr-defined]
     mcp._megalos_registry = registry  # type: ignore[attr-defined]
     return mcp
 

@@ -1,6 +1,7 @@
 """MCP tool functions for megalos workflow engine."""
 
 import functools
+import hashlib
 import json
 import re
 
@@ -664,7 +665,12 @@ def _propagate_to_parent(
     )
 
 
-def register_tools(mcp, workflows, registry: Registry | None = None):
+def register_tools(
+    mcp,
+    workflows,
+    workflow_fingerprints: dict[str, str] | None = None,
+    registry: Registry | None = None,
+):
     """Register workflow tools on the FastMCP app.
 
     ``registry`` is the loaded ``Registry`` of external MCP servers used by
@@ -673,7 +679,48 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
     would have been rejected at load time by the schema validator's
     registry-required rule (T01), so the executor never reaches the fork
     with a None registry in normal operation.
+
+    ``workflow_fingerprints`` is the ADR-001 fingerprint map held lockstep
+    with ``workflows``. When a test mutates the ``workflows`` dict in place
+    without also updating the map, ``_fingerprint_for`` derives the value
+    on demand from the parsed dict — see that helper's docstring. The map
+    may be ``None`` for legacy callers (stub servers, third-party test
+    harnesses); ``_fingerprint_for`` then always falls back to the derived
+    value. Dormant in T01 — stamped onto new sessions but never read back.
     """
+    if workflow_fingerprints is None:
+        workflow_fingerprints = {}
+
+    def _fingerprint_for(workflow_name: str) -> str:
+        """Resolve the ADR-001 fingerprint for a workflow in the live dict.
+
+        Preferred path: look up the pre-computed map populated at
+        ``create_app`` time from the raw YAML bytes.
+
+        Fallback path: some tests mutate the ``workflows`` dict in place
+        (e.g. ``WORKFLOWS['branch-test'] = _branching_workflow()``) without
+        touching the fingerprints map. When the map has no entry for a
+        name we see in ``workflows``, derive the fingerprint from the
+        parsed dict using the same canonical-JSON hash algorithm. The two
+        paths produce the same digest given the same parsed data — the
+        only difference is the entry-point. Dormant in T01 so the choice
+        of path is not observable; T02 activation will revisit whether
+        tests should keep the map explicitly in sync.
+        """
+        fp = workflow_fingerprints.get(workflow_name)
+        if fp is not None:
+            return fp
+        wf = workflows.get(workflow_name)
+        if wf is None:
+            # Caller is asking for a workflow not in the dict at all. The
+            # tool-level code paths all pre-check ``workflow_type in workflows``
+            # before reaching create_session, so this branch is defensive.
+            # Returning the sentinel keeps the stamp honest ("we do not know").
+            return "pre-versioning"
+        canonical = json.dumps(
+            wf, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
 
     @mcp.tool()
     @_trap_errors("category")
@@ -731,7 +778,11 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
 
         wf = workflows[workflow_type]
         first_step = wf["steps"][0]
-        sid = state.create_session(workflow_type, current_step=first_step["id"])
+        sid = state.create_session(
+            workflow_type,
+            current_step=first_step["id"],
+            workflow_fingerprint=_fingerprint_for(workflow_type),
+        )
         state.increment_visit(sid, first_step["id"])
 
         # Auto-execute any mcp_tool_call steps at the front of the workflow
@@ -1466,8 +1517,16 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
 
         child_wf = workflows[target]
         first_step = child_wf["steps"][0]
+        # Child fingerprint is pulled from the CHILD workflow entry, not
+        # inherited from the parent (ADR-001: child-spawn-timing property).
+        # A child-workflow edit between parent-start and child-spawn must
+        # surface as a fresh mismatch at spawn time rather than being
+        # invisibly accepted.
         child_sid = state.create_session(
-            target, current_step=first_step["id"], parent_session_id=parent_session_id
+            target,
+            current_step=first_step["id"],
+            parent_session_id=parent_session_id,
+            workflow_fingerprint=_fingerprint_for(target),
         )
         state.increment_visit(child_sid, first_step["id"])
 
@@ -1618,6 +1677,9 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
         # raises, no session row was committed — the rollback undoes both the
         # sessions INSERT and the session_stack INSERT atomically.
         try:
+            # Digression-child fingerprint from the pushed workflow's own
+            # map entry — same child-spawn-timing property as call-children
+            # above (ADR-001).
             child_sid = state.create_session(
                 workflow_type,
                 current_step=first_step["id"],
@@ -1625,6 +1687,7 @@ def register_tools(mcp, workflows, registry: Registry | None = None):
                 frame_type="digression",
                 call_step_id=paused_at_step,
                 max_stack_depth=max_stack_depth,
+                workflow_fingerprint=_fingerprint_for(workflow_type),
             )
         except state.StackFull as e:
             return error_response(

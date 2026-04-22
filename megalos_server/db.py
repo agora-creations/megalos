@@ -29,7 +29,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     -- Both columns are also the legacy on-write cache reconciled against session_stack;
     -- reads for runtime logic MUST go through state.py's stack accessors, not these columns.
     called_session TEXT,
-    parent_session_id TEXT
+    parent_session_id TEXT,
+    -- Snapshot of the workflow's canonical fingerprint (see
+    -- docs/adr/001-workflow-versioning.md) taken at session-create time.
+    -- Immutable for the session's lifetime. Rows pre-dating this column
+    -- are migrated to the sentinel 'pre-versioning' via ADD COLUMN …
+    -- DEFAULT below; fresh INSERTs provide the real value from the
+    -- in-memory fingerprints map. Dormant in T01 — stamped but not read.
+    workflow_fingerprint TEXT NOT NULL DEFAULT 'pre-versioning'
 )
 """
 
@@ -72,9 +79,17 @@ def _get_conn() -> sqlite3.Connection:
     # Column-order-coupled with _SELECT_COLS + _row_to_session in state.py.
     # New columns MUST append at the end; reordering silently corrupts row reads.
     existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(sessions)")}
-    for col_name, col_type in (("called_session", "TEXT"), ("parent_session_id", "TEXT")):
+    for col_name, col_ddl in (
+        ("called_session", "TEXT"),
+        ("parent_session_id", "TEXT"),
+        # NOT NULL DEFAULT is legal on SQLite ADD COLUMN provided the default
+        # is a literal — the engine backfills every pre-existing row with the
+        # sentinel 'pre-versioning' in the same ALTER, which is exactly the
+        # behaviour ADR-001 specifies for the migration transaction.
+        ("workflow_fingerprint", "TEXT NOT NULL DEFAULT 'pre-versioning'"),
+    ):
         if col_name not in existing_cols:
-            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_type}")
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_ddl}")
     conn.execute(_SESSION_STACK_SCHEMA)
     conn.execute(_SESSION_STACK_INDEX)
     _tls.conn = conn
