@@ -5,10 +5,11 @@ workflow YAML path, returns a string suitable for pasting into a
 ```mermaid fenced code block on GitHub.
 
 Current scope: sequential step-to-step rendering, branch edges with
-condition labels, optional ``default_branch`` fallback edges, and a
-visually distinct node shape for ``mcp_tool_call`` steps. Preconditions,
-sub-workflow ``call`` subgraph references, and CLI wiring are handled
-in later slices.
+condition labels, optional ``default_branch`` fallback edges, a
+visually distinct node shape for ``mcp_tool_call`` steps, and a dotted
+gating edge from the source step to any step carrying a ``precondition``
+(``when_equals`` or ``when_present``). Sub-workflow ``call`` subgraph
+references and CLI wiring are handled in later slices.
 """
 
 from pathlib import Path
@@ -93,6 +94,47 @@ def _edge_lines(step: dict[str, Any], next_step: dict[str, Any] | None) -> list[
     return [f"    {sid} --> {next_step['id']}"]
 
 
+def _format_condition_value(value: Any) -> str:
+    """Render a ``when_equals`` value for a Mermaid edge label.
+
+    Numbers, bools, and ``None`` render bare (``42``, ``true``, ``null``);
+    every other type renders quoted with D029 ``&quot;`` escaping so the
+    label survives Mermaid's double-quote-delimited edge-label form.
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int | float):
+        return str(value)
+    return f'&quot;{_escape_label(str(value))}&quot;'
+
+
+def _precondition_edge(step: dict[str, Any]) -> str | None:
+    """Render a dotted gating edge for a step carrying a ``precondition``.
+
+    Emits ``<source_sid> -. "<summary>" .-> <gated_sid>`` where the source
+    id is the second dot-segment of the ``step_data.<sid>[.<field>...]``
+    ref path. Returns ``None`` for steps without a precondition. The
+    linear/branch edges produced by ``_edge_lines`` continue to emit
+    unchanged; the dotted edge is additive (rendering 1 from the decision
+    register).
+    """
+    pre = step.get("precondition")
+    if not pre:
+        return None
+    if "when_equals" in pre:
+        ref = pre["when_equals"]["ref"]
+        rendered = _format_condition_value(pre["when_equals"]["value"])
+        tail = f"== {rendered}"
+    else:
+        ref = pre["when_present"]
+        tail = "present"
+    segments = ref.split(".")
+    source_sid, last_seg = segments[1], segments[-1]
+    return f'    {source_sid} -. "when {last_seg} {tail}" .-> {step["id"]}'
+
+
 def render(workflow_path: str | Path) -> str:
     """Render a workflow YAML as a Mermaid ``flowchart TD`` block.
 
@@ -109,4 +151,7 @@ def render(workflow_path: str | Path) -> str:
     for index, step in enumerate(steps):
         next_step = steps[index + 1] if index + 1 < len(steps) else None
         lines.extend(_edge_lines(step, next_step))
+        dotted = _precondition_edge(step)
+        if dotted is not None:
+            lines.append(dotted)
     return "\n".join(lines)
