@@ -52,6 +52,51 @@ name: my_workflow
 # ...
 ```
 
+## Neovim (yaml-language-server via nvim-lspconfig)
+
+Install [yaml-language-server](https://github.com/redhat-developer/yaml-language-server) (`npm i -g yaml-language-server`) and wire it up through `nvim-lspconfig`. This is the same language server the VS Code Red Hat extension wraps, so the binding shape is identical.
+
+Add to your Neovim config (`init.lua`):
+
+```lua
+require("lspconfig").yamlls.setup({
+  settings = {
+    yaml = {
+      schemas = {
+        ["https://raw.githubusercontent.com/agora-creations/megalos/main/schemas/megalos-workflow.schema.json"] = {
+          "workflows/*.yaml",
+          "workflows/*.yml",
+          "megalos_server/workflows/*.yaml",
+          "tests/fixtures/workflows/**/*.yaml",
+        },
+      },
+    },
+  },
+})
+```
+
+For `coc.nvim` users, install `coc-yaml` and place the same `yaml.schemas` map in `:CocConfig`. The inline `# yaml-language-server: $schema=./schemas/megalos-workflow.schema.json` comment at the top of a workflow file is also honoured and avoids per-project config entirely.
+
+## Helix
+
+Helix ships with built-in LSP support. Install `yaml-language-server` (`npm i -g yaml-language-server`) and bind the schema in `~/.config/helix/languages.toml`:
+
+```toml
+[language-server.yaml-language-server.config.yaml]
+schemas = { "https://raw.githubusercontent.com/agora-creations/megalos/main/schemas/megalos-workflow.schema.json" = [
+  "workflows/*.yaml",
+  "workflows/*.yml",
+  "megalos_server/workflows/*.yaml",
+  "tests/fixtures/workflows/**/*.yaml",
+] }
+
+[[language]]
+name = "yaml"
+language-servers = ["yaml-language-server"]
+```
+
+As with the other editors, the `# yaml-language-server: $schema=./schemas/megalos-workflow.schema.json` top-of-file comment is an inline alternative that binds a single workflow without touching global config.
+
 ## What the schema checks (and what it doesn't)
 
 **Checked at typing time via the schema:**
