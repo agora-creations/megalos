@@ -2,8 +2,10 @@
 
 Step through a workflow without calling an LLM. Bootstrap (env-var
 discipline, production workflow loader reuse via ``create_app``) is
-followed by a REPL loop that drives ``start_workflow`` + ``submit_step``
-through ``app.call_tool`` until the workflow completes or errors.
+followed by a classification-first REPL loop that drives ``start_workflow``
++ ``submit_step`` through ``app.call_tool`` until the workflow completes or
+errors. Schema-validation re-prompts are handled here in-loop without a
+local retry counter — production owns retry state via ``state.increment_retry``.
 """
 
 # 1. Env var set BEFORE any megalos_server.* import.
@@ -21,6 +23,46 @@ import yaml
 
 # 3. megalos_server import — only create_app, nothing else.
 from megalos_server import create_app
+
+
+# Terminal statuses that end the REPL. `workflow_complete` exits 0; the rest
+# exit 1. `session_escalated` and `workflow_changed` are listed for defense —
+# production currently emits them under `status="error"` with a `code` field,
+# but the plan (D039) pins them as first-class terminals for forward
+# compatibility.
+_TERMINAL_STATUSES = frozenset(
+    {"workflow_complete", "error", "session_escalated", "workflow_changed"}
+)
+
+
+def _print_validation_error(envelope: dict) -> None:
+    """Print a validation_error envelope to stderr; no exit decision here."""
+    print("Validation failed:", file=sys.stderr)
+    for err in envelope["errors"]:
+        print(f"  - {err}", file=sys.stderr)
+    hint = envelope.get("validation_hint")
+    if hint:
+        print(f"Hint: {hint}", file=sys.stderr)
+
+
+def _print_terminal(envelope: dict) -> None:
+    """Print the operator-facing payload of a terminal envelope."""
+    status = envelope.get("status")
+    if status == "workflow_complete":
+        print("\n=== Workflow complete ===")
+        print(envelope.get("message", ""))
+        return
+    # Non-success terminal: surface the message if present, else the relevant
+    # error keys. `status=="error"` envelopes carry `code` + `error`.
+    message = envelope.get("message")
+    if message:
+        print(message, file=sys.stderr)
+    code = envelope.get("code")
+    if code:
+        print(f"code: {code}", file=sys.stderr)
+    error = envelope.get("error")
+    if error:
+        print(f"error: {error}", file=sys.stderr)
 
 
 def main() -> None:
@@ -89,28 +131,64 @@ def main() -> None:
         )
     ).structured_content
     assert result is not None
-    envelope = result
+    envelope: dict = result
     session_id = envelope["session_id"]
+    # step_id captured on the advance path, never reassigned in the re-prompt
+    # branch — D039 client-side invariant. Initialized from the start_workflow
+    # envelope's active step below.
+    step_id = ""
 
     while True:
-        # Terminal success.
-        if envelope.get("status") == "workflow_complete":
-            print("\n=== Workflow complete ===")
-            print(envelope.get("message", ""))
-            sys.exit(0)
+        status = envelope.get("status")
 
-        # Error envelope — narrow: T02 handles status == "error" only.
-        if envelope.get("status") == "error":
-            print(f"code: {envelope.get('code', '')}", file=sys.stderr)
-            print(f"error: {envelope.get('error', '')}", file=sys.stderr)
-            sys.exit(1)
+        # Classification 1 — validation_error re-prompt.
+        if status == "validation_error":
+            _print_validation_error(envelope)
+            if envelope.get("retries_exhausted"):
+                print(envelope["message"], file=sys.stderr)
+                sys.exit(1)
+            print(
+                f"Retries remaining: {envelope['retries_remaining']}",
+                file=sys.stderr,
+            )
+            # Re-prompt: DO NOT mutate step_id, DO NOT track retry count locally.
+            try:
+                response = input("> ")
+            except EOFError:
+                print("Dry-run aborted by user (EOF)", file=sys.stderr)
+                sys.exit(1)
+            retry_result = asyncio.run(
+                mcp.call_tool(
+                    "submit_step",
+                    {
+                        "session_id": session_id,
+                        "step_id": step_id,
+                        "content": response,
+                    },
+                )
+            ).structured_content
+            assert retry_result is not None
+            envelope = retry_result
+            continue
 
-        # Active-step envelope: print banner + directive, prompt, submit.
-        # start_workflow returns "current_step"; submit_step returns "next_step".
-        # Read whichever is present; the REPL treats them uniformly as "the active step".
+        # Classification 2 — terminal.
+        if status in _TERMINAL_STATUSES:
+            _print_terminal(envelope)
+            sys.exit(0 if status == "workflow_complete" else 1)
+
+        # Classification 3 — advance. Path-less envelope (no current_step and
+        # no next_step) surfaces as KeyError: intentional bug signal.
         active = envelope.get("current_step") or envelope["next_step"]
-        directive = envelope["directive"]
+        step_id = active["id"]
         print(f"\n=== Step: {active['id']} — {active['title']} ===")
+        # `gates` is a sibling key on the envelope (see tools.py result-shape),
+        # not a field on current_step/next_step. Render only when non-empty.
+        gates = envelope.get("gates") or []
+        if gates:
+            print("Gates:")
+            for g in gates:
+                print(f"  - {g}")
+        directive = envelope["directive"]
         print(directive)
         print()
         try:
@@ -119,18 +197,18 @@ def main() -> None:
             print("Dry-run aborted by user (EOF)", file=sys.stderr)
             sys.exit(1)
 
-        result = asyncio.run(
+        advance_result = asyncio.run(
             mcp.call_tool(
                 "submit_step",
                 {
                     "session_id": session_id,
-                    "step_id": active["id"],
+                    "step_id": step_id,
                     "content": response,
                 },
             )
         ).structured_content
-        assert result is not None
-        envelope = result
+        assert advance_result is not None
+        envelope = advance_result
 
 
 if __name__ == "__main__":
