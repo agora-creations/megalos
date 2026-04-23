@@ -29,6 +29,38 @@ FIXTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "workflows"
 PRODUCTION_WORKFLOW_DIR = REPO_ROOT / "megalos_server" / "workflows"
 
 
+# Fixture-to-role map. Each entry pins one named fixture as the canonical
+# representative of a structural constraint class in the authoring grammar.
+# Kept inline so that if a fixture is renamed or its shape drifts, the
+# corpus-per-shape parity tests below break loudly. The broad-fixture
+# parametrized test catches mass regressions; this map catches per-shape
+# regressions with explicit, auditable fixture→role pinning.
+#
+# Each value is (relative-path-from-FIXTURE_DIR, shape-description).
+CORPUS_PER_SHAPE: dict[str, tuple[str, str]] = {
+    "linear": (
+        "canonical.yaml",
+        "base step shape, no branches/preconditions/call/schema",
+    ),
+    "conditional": (
+        "demo_branching.yaml",
+        "branches grammar + precondition when_equals/when_present",
+    ),
+    "sub_workflow_call": (
+        "artifact_inlining_parent.yaml",
+        "call + call_context_from composition",
+    ),
+    "action": (
+        "mcp_tool_call/success_then_read.yaml",
+        "action: mcp_tool_call mutex + literal-only rules",
+    ),
+    "output_schema_constrained": (
+        "demo_validation.yaml",
+        "output_schema + validation_hint + max_retries",
+    ),
+}
+
+
 def _load_exported_schema() -> dict:
     with SCHEMA_PATH.open() as f:
         return json.load(f)
@@ -82,6 +114,41 @@ def test_validator_accepted_fixture_passes_exported_schema(fixture_path: Path):
 
     # validate_workflow injects schema_version when absent. Re-parse raw so the
     # JSON Schema check runs against the authoring surface, not the normalized form.
+    raw = yaml.safe_load(fixture_path.read_text())
+    schema = _load_exported_schema()
+    jsonschema.validate(instance=raw, schema=schema)
+
+
+@pytest.mark.parametrize(
+    "shape,fixture_rel,description",
+    [(shape, rel, desc) for shape, (rel, desc) in CORPUS_PER_SHAPE.items()],
+    ids=list(CORPUS_PER_SHAPE.keys()),
+)
+def test_corpus_per_shape_fixture_passes_exported_schema(
+    shape: str, fixture_rel: str, description: str
+) -> None:
+    """Pin one named fixture per structural constraint class to the exported
+    schema. This is intentionally redundant with the broad-fixture parametrized
+    test above — redundancy is the point. Broad catches mass regression; this
+    catches per-shape regression when a specific fixture's representative role
+    is lost (fixture renamed, shape drifts, grammar weakens). The `description`
+    field documents the structural role and is kept inline so future refactors
+    see the role-pinning contract at a glance.
+    """
+    fixture_path = FIXTURE_DIR / fixture_rel
+    assert fixture_path.exists(), (
+        f"corpus fixture for shape '{shape}' missing: {fixture_path} "
+        f"(role: {description})"
+    )
+
+    registry = _stub_registry()
+    errors, doc = validate_workflow(str(fixture_path), registry=registry)
+    assert not errors, (
+        f"corpus fixture '{fixture_rel}' pinned as '{shape}' representative "
+        f"no longer passes validate_workflow: {errors}"
+    )
+    assert doc is not None
+
     raw = yaml.safe_load(fixture_path.read_text())
     schema = _load_exported_schema()
     jsonschema.validate(instance=raw, schema=schema)
