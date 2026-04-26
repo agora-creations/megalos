@@ -145,4 +145,4 @@ The proper Phase J roadmap is deferred until Phase H is shipped and the seven op
 
 This scaffold's purpose is to reserve strategic space and constrain what Phase J can eventually become, not to direct near-term work. At sole-author pace, Phase J is plausibly six to twelve months; combined with Phase H and Phase I, the full remaining megálos roadmap beyond current in-flight work sits in the eighteen-to-twenty-four-month range. Phase J is not the first thing to build next. It is the last of the three large phases, and its timing depends on information the scaffold's authors don't yet have.
 
-Upon Phase J completion, megálos serves all five customer shapes to foundation-complete standard. That is the endpoint the scaffold points at; the path to it is not yet drawn.
+Upon Phase J completion, megálos serves all five user shapes to foundation-complete standard. That is the endpoint the scaffold points at; the path to it is not yet drawn.

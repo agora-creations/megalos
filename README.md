@@ -181,7 +181,7 @@ Authoring mechanics — directive quality, context injection, gates, branches, s
 | Phase I — Horizon Developer+ | Managed hosting tier for Shape 4 | deferred |
 | Phase J — visual studio + template library + consumer onramp | Shape 5 surface (vision-v5 §3) | strategic scaffold only — see [`docs/vision/2026-04-22-phase-j-scaffold.md`](docs/vision/2026-04-22-phase-j-scaffold.md) |
 
-The canonical strategic document is [`docs/vision/2026-04-22-megalos-vision-v5.md`](docs/vision/2026-04-22-megalos-vision-v5.md). Five customer shapes, six guardrails, the rationale for every phase above.
+The canonical strategic document is [`docs/vision/2026-04-22-megalos-vision-v5.md`](docs/vision/2026-04-22-megalos-vision-v5.md). Five user shapes, six guardrails, the rationale for every phase above.
 
 ## License
 
