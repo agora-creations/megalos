@@ -3,7 +3,7 @@
 **Status:** Canonical. Supersedes [`2026-04-15-megalos-vision-v4.md`](./2026-04-15-megalos-vision-v4.md), which becomes a historical document. Where v4 and v5 conflict, v5 governs.
 **Author:** Diego Marono (with strategic review)
 **Date:** 2026-04-22
-**Principal change from v4:** Reverses v4's rejection of a no-code visual authoring studio, introduces a fifth customer shape (non-technical authors), and pins six mechanical guardrails that prevent the failure mode v4 was originally guarding against.
+**Principal change from v4:** Reverses v4's rejection of a no-code visual authoring studio, introduces a fifth user shape (non-technical authors), and pins six mechanical guardrails that prevent the failure mode v4 was originally guarding against.
 
 ---
 
@@ -39,7 +39,7 @@ Four substantive shifts, each of which contributes to why the v4 rejection no lo
 
 **First, the technical harness is now mature enough to support a visual layer without the visual layer dominating.** When v4 was written, M001–M008 had not shipped. The runtime did not yet have sub-workflows (M004), multi-flow context (M005), MCP tool calls as actions (M006), the security layer (M007), a performance baseline (M008), or the workflow-versioning correctness property (M010). Adding a visual editor on top of an unstable runtime would have meant the visual editor dominating the roadmap; the runtime would have evolved to fit the GUI rather than the other way around. With M001–M010 shipped and M011–M012 in progress, the runtime is a settled foundation. A visual editor added on top of it is a client of the runtime, not a force that reshapes it.
 
-**Second, the four-customer-shape framework makes the author-vs-consumer split explicit in a way v4 did not.** v4 treated the audience as undifferentiated "users who write workflows." The four-shape framework (workflow authors, small teams / indie developers, enterprise self-hosters, hosted-plan customers via Horizon Developer+) separates the technical-author population from the technical-platform-engineer population from the consumer-of-deployed-workflows population. The v4 rejection was about not turning megálos into a product optimized for non-technical authors at the cost of the technical-author experience. The v5 position is additive: serve the existing four shapes uncompromised *and* serve a fifth shape (non-technical authors) through a product surface that does not touch the other four.
+**Second, the four-user-shape framework makes the author-vs-consumer split explicit in a way v4 did not.** v4 treated the audience as undifferentiated "users who write workflows." The four-shape framework (workflow authors, small teams / indie developers, enterprise self-hosters, hosted-plan users via Horizon Developer+) separates the technical-author population from the technical-platform-engineer population from the consumer-of-deployed-workflows population. The v4 rejection was about not turning megálos into a product optimized for non-technical authors at the cost of the technical-author experience. The v5 position is additive: serve the existing four shapes uncompromised *and* serve a fifth shape (non-technical authors) through a product surface that does not touch the other four.
 
 **Third, the template-library approach changes the failure mode the rejection was guarding against.** v4's concern was that a visual editor allows arbitrary structure to be constructed by users who do not understand structure. A template library inverts this: non-technical users do not construct structure from scratch; they adapt pre-curated templates. The structure comes from the templates, authored by technical authors using the full authoring surface. The visual editor is not a flow-builder for arbitrary topologies — it is a modification surface over a curated catalog. This is a different product than Landbot's free-form visual builder, and the failure modes are different: Landbot's users can build anything and the rigor erodes under UX pressure on the visual side; template-library users can adapt well-designed patterns within bounded scope, and the rigor lives in the templates themselves.
 
@@ -51,7 +51,7 @@ None of these four arguments alone would justify the reversal. Together, they de
 
 ## 3. What vision-v5 asserts
 
-**megálos serves five customer shapes, each with a distinct product surface, unified by a single deterministic runtime and a single canonical schema.**
+**megálos serves five user shapes, each with a distinct product surface, unified by a single deterministic runtime and a single canonical schema.**
 
 The five shapes:
 
@@ -61,7 +61,7 @@ The five shapes:
 
 *Shape 3 — Enterprise self-hosters.* Technical platform engineers deploying megálos in their own infrastructure, served by Phase H (distribution hardening). Introduced in planning docs post-v4; canonicalized here.
 
-*Shape 4 — Hosted-plan customers via Horizon Developer+.* Users of a future managed megálos offering on Anthropic's Horizon. Architecturally enabled by Phase H, deferred as Phase I. Introduced in planning docs post-v4; canonicalized here.
+*Shape 4 — Hosted-plan users via Horizon Developer+.* Users of a future managed megálos offering on Anthropic's Horizon. Architecturally enabled by Phase H, deferred as Phase I. Introduced in planning docs post-v4; canonicalized here.
 
 *Shape 5 — Non-technical authors.* Users adapting pre-curated templates to their specific needs via a visual authoring studio. Served by Phase J (the visual studio + template library + consumer-subscription onramp). **New in v5.**
 
@@ -119,7 +119,7 @@ The following decisions from v4's §9 are amended or added. v4 decisions not lis
 
 **9.6 (amended) — Rasa CALM as design reference, not template.** CALM's patterns are adopted where proven (v4 §9.6, unchanged). CALM's no-code studio was rejected in v4 as incompatible with a technical-author-only audience. v5 builds a visual studio for Shape 5 specifically, *under the six guardrails above*, which produces a materially different product than CALM's studio (template-bounded rather than free-form, same schema as the CLI tools rather than a GUI-specific representation). The rejection of CALM's *specific studio design* holds; the rejection of *any visual studio whatsoever* is lifted.
 
-**9.8 (new) — Customer-shape framework as canonical.** megálos serves five customer shapes (Shape 1 through Shape 5, as specified in §3). Every product decision names which shape or shapes it serves. No product decision serves Shape 5 at the cost of Shapes 1–4; guardrail 5 (templates-only entry) and guardrail 4 (runtime client, not privileged surface) mechanically enforce this.
+**9.8 (new) — User-shape framework as canonical.** megálos serves five user shapes (Shape 1 through Shape 5, as specified in §3). Every product decision names which shape or shapes it serves. No product decision serves Shape 5 at the cost of Shapes 1–4; guardrail 5 (templates-only entry) and guardrail 4 (runtime client, not privileged surface) mechanically enforce this.
 
 **9.9 (new) — Template library as first-class artifact.** The template library's quality is the product for Shape 5. A library with fewer than roughly two hundred templates across the core domains is insufficient to serve Shape 5 well. Template authoring is ongoing technical work performed by Shape 1 authors (potentially with mikrós assistance) and curated centrally. Templates are not user-generated content; they are curated exemplars.
 
@@ -169,7 +169,7 @@ The following should be resolved during Phase J's `/discuss` gate, not preemptiv
 
 ## 10. Summary
 
-Vision-v5 asserts that megálos serves five customer shapes — four preserved from prior planning plus a new Shape 5 (non-technical authors adapting curated templates via a visual studio). The addition of Shape 5 reverses vision-v4's rejection of a no-code visual studio, which was load-bearing for the technical-author-only audience v4 targeted.
+Vision-v5 asserts that megálos serves five user shapes — four preserved from prior planning plus a new Shape 5 (non-technical authors adapting curated templates via a visual studio). The addition of Shape 5 reverses vision-v4's rejection of a no-code visual studio, which was load-bearing for the technical-author-only audience v4 targeted.
 
 The reversal is justified by four shifts since v4 was written: runtime maturity makes the visual studio additive rather than dominant; the four-shape framework separates audiences cleanly; the template-library approach bounds the failure mode v4 was guarding against; and the BYOK-plus-consumer-subscription onramp makes megálos economically different from Landbot at every price point.
 
