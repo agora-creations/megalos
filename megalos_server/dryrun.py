@@ -21,21 +21,21 @@ field but falls back to the workflow dict for first-step entries that
 arrive without it (D048).
 """
 
-# 1. Env var set BEFORE any megalos_server.* import.
-import os
-
-os.environ.setdefault("MEGALOS_DB_PATH", ":memory:")
-
-# 2. Stdlib imports.
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
 import yaml
 
-# 3. megalos_server import — only create_app, nothing else.
 from megalos_server import create_app
+
+# Refused at startup (in ``main``): unset MEGALOS_DB_PATH or ``:memory:``.
+# FastMCP dispatches each ``call_tool`` on a worker thread, and ``db.py`` keeps
+# the SQLite connection in ``threading.local``. With ``:memory:``, every
+# worker thread opens its own private DB and sessions written by one dispatch
+# are invisible to the next (issue #41).
 
 
 # Terminal statuses that end the REPL. `workflow_complete` exits 0; the rest
@@ -538,9 +538,23 @@ def _descend(
 
 
 def main() -> None:
+    db_path = os.environ.get("MEGALOS_DB_PATH")
+    if not db_path or db_path == ":memory:":
+        sys.stderr.write(
+            "dryrun: MEGALOS_DB_PATH must be set to a file path "
+            "(':memory:' is unsupported — session state is invisible across "
+            "FastMCP worker threads; see issue #41).\n"
+            "Hint: export MEGALOS_DB_PATH=$(mktemp -t megalos-dryrun.XXXXXX).db\n"
+        )
+        sys.exit(2)
+
     parser = argparse.ArgumentParser(
         prog="megalos-dryrun",
-        description="Step through a megálos workflow interactively, without calling an LLM.",
+        description=(
+            "Step through a megálos workflow interactively, without calling "
+            "an LLM. Requires MEGALOS_DB_PATH to be set to a file path "
+            "(':memory:' is unsupported — see issue #41)."
+        ),
     )
     parser.add_argument("workflow", type=Path, help="Path to workflow YAML file")
     parser.add_argument(
