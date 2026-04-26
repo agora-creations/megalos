@@ -225,8 +225,8 @@ def test_loop_invariant_same_step_id_for_retries(
     shutil.copy(DEMO_VALIDATION_FIXTURE, target)
 
     # In-process import — subprocess boundary can't monkeypatch the MCP layer.
-    # Env-var ordering matches production: the module sets MEGALOS_DB_PATH
-    # at top level, before any megalos_server imports.
+    # The autouse ``_isolated_db`` fixture has already set MEGALOS_DB_PATH to a
+    # tmp_path file, so the startup guard in ``main`` (issue #41) accepts.
     import importlib
 
     import megalos_server.dryrun as dryrun_mod
