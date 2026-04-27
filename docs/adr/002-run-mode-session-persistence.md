@@ -36,6 +36,8 @@ This is the answer v6 §9 Q4 ("self-host vs paid: explicit value asymmetry") dem
 
 **This decoupling is a Phase G blocker, not a follow-up.** If artifact retention cannot be cleanly decoupled from session retention in Phase G's design, this ADR's Level 1 commitment collapses — Level 1 becomes indistinguishable from Level 0 (no persistence) the moment the TTL expires for any user who values their output. Phase G's `/discuss` must confirm that the decoupling is buildable at acceptable cost before this ADR's commitments hold. If Phase G surfaces that the decoupling is substantially more expensive than expected, this ADR is reopened, not patched. That is the explicit dependency.
 
+**Update (2026-04-27): blocker resolved.** Investigation completed against the current artifact-storage architecture (see [ADR-006](006-artifact-retention-decoupling.md)). Decoupling is buildable at approximately one milestone-equivalent of work — a separate `ArtifactStore` interface parallel to MH2's `SessionStore`, populated by user-explicit capture actions. ADR-006 pins the design specifics (interface pattern, user-captured-explicit model, (C)/(O) split, pre-Phase-I identity-binding behavior). This commitment 4 holds; ADR-002 does not reopen.
+
 ## 3. Implementation sequencing
 
 Paid megálos cannot deliver Level 1 until Phase I ships. Account-bound resumption requires an account system; the account system is Phase I infrastructure. The honest framing is that paid megálos has a transition story.
