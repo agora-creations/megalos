@@ -8,6 +8,12 @@
 
 ---
 
+## Update (2026-04-27)
+
+This ADR is the source-of-truth for the consumer-content brand language: per **commitment 2 below**, the consumer-content brand renames from "the Library" to **Workflows**, and the folder-unit "Library entry" renames to **collection**. The v1 catalog hostname migrates from `agora-library.dev` to `agora-workflows.dev` (per v7 §6.4). This Update applies the renamed vocabulary throughout the ADR body — three-layer table, commitments, consequences, references — so that the document that pins the brand-language shift uses that language consistently. Quoted v6 prose (e.g., the v6 §9 Q1 resolution in §1) is retained verbatim as historical record. The strategic reasoning, the GitLab-analogy commitment, and the layer-discipline framework are unchanged; the rename is vocabulary alignment with the commitment this ADR itself sets.
+
+---
+
 ## 1. Context
 
 Vision-v6 §9 Q1 resolved naming as: "the curated catalog is the Library; the hosted chat UI is megálos." Under that resolution, "megálos" was the consumer-facing brand of the paid product specifically. v6 §9 Q8 deferred the legal/billing-entity brand question while noting "likely `agora-creations` remains the GitHub-organization brand and 'megálos' is the consumer-facing product brand."
@@ -26,23 +32,23 @@ This ADR encodes the inversion's strategic reasoning so future surfaces, future 
 
 Six commitments. They hold together; weakening any one weakens the others.
 
-**1. agorá is the consumer-facing brand.** Both surfaces — the catalog website at `agora-library.dev` (per v7 §6.4) and the chat UI (subdomain or path under `agora-library.dev`, pinned at Phase G `/plan` time) — carry the agorá brand. Both deployments — hosted and self-host — show identical agorá branding. There is no megálos-branded fallback for self-host: a user running `pip install megalos-server` and visiting `localhost` sees agorá, exactly as a self-hosted GitLab instance is branded GitLab. **The product identity travels with the bundle, not with the operator** (the GitLab-analogy commitment).
+**1. agorá is the consumer-facing brand.** Both surfaces — the catalog website at `agora-workflows.dev` (per v7 §6.4) and the chat UI (subdomain or path under `agora-workflows.dev`, pinned at Phase G `/plan` time) — carry the agorá brand. Both deployments — hosted and self-host — show identical agorá branding. There is no megálos-branded fallback for self-host: a user running `pip install megalos-server` and visiting `localhost` sees agorá, exactly as a self-hosted GitLab instance is branded GitLab. **The product identity travels with the bundle, not with the operator** (the GitLab-analogy commitment).
 
-**2. megálos demotes to the runtime's technical name.** The Python package is `megalos-server`. The runtime is "the megálos runtime" in technical contexts where disambiguation matters. It is not consumer-facing. End users encountering agorá do not see "megálos" anywhere in the UI surface. Developers, contributors, and self-host operators encounter "megálos" because they install the runtime that serves the consumer surface — the technical layer is theirs to address.
+**2. megálos demotes to the runtime's technical name; the consumer-content brand is Workflows.** The Python package is `megalos-server`. The runtime is "the megálos runtime" in technical contexts where disambiguation matters. It is not consumer-facing. End users encountering agorá do not see "megálos" anywhere in the UI surface. Developers, contributors, and self-host operators encounter "megálos" because they install the runtime that serves the consumer surface — the technical layer is theirs to address. The consumer-content brand — what v6 prose framed as "the Library" — is named **Workflows**. The folder-unit (a curated bundle of related workflows behind one MCP server) is a **collection**. "Library" persists only inside the aggregator-repo name (`awesome-workflows` per ADR-009 — see ADR-009 commitment 1) and inside historical citations to v6 prose.
 
 **3. mikrós stays at the developer-tooling layer under existing naming.** `agora-creations/mikros` remains externally visible. Its consumers — AI coding agents (Claude Code, Gemini CLI, future adapters) and the developers configuring them — are the technical-layer audience that the brand inversion explicitly does not reach. Phase F's v0.2.1 release is grandfathered as-is; its references to megálos as the runtime are correct under the v7 framing because megálos *is* the runtime. The brand inversion does not require backwards-compatible mikrós work.
 
-**4. agora-creations remains the GitHub-org brand.** Unchanged. The org name is the legal/operational entity that hosts the open-source repositories — `megalos-server`, `agora-library`, `mikros`, future additions. agorá-the-consumer-brand is distinct from `agora-creations`-the-org-brand by one accent and by a hyphen, but they are intentionally aligned: the consumer brand and the org brand share a Greek root, signaling that the org is the operator behind agorá the product.
+**4. agora-creations remains the GitHub-org brand.** Unchanged. The org name is the legal/operational entity that hosts the open-source repositories — `megalos-server`, the Workflows aggregator (exact name pinned in ADR-009), `mikros`, future additions. agorá-the-consumer-brand is distinct from `agora-creations`-the-org-brand by one accent and by a hyphen, but they are intentionally aligned: the consumer brand and the org brand share a Greek root, signaling that the org is the operator behind agorá the product.
 
 **5. Three-layer architecture is the boundary discipline.** Future naming or rebranding decisions test against this layered structure:
 
 | Layer | Audience | Brand | Examples |
 |-------|----------|-------|----------|
 | **Consumer surface** | End users running workflows | **agorá** | Catalog website, chat UI, hosted product, self-host bundle visible to non-technical users |
-| **Content layer** | Library curators + consumers of the Library catalog | **the Library** (at `agora-creations/agora-library`) | The MCP-server entries (`writing/`, `analysis/`, `professional/`, future), their contents, the curation discipline |
+| **Content layer** | Workflows curators + consumers of the Workflows catalog | **Workflows** (at the aggregator repo under `agora-creations`, exact name per ADR-009) | The MCP-server collections (`writing/`, `analysis/`, `professional/`, future), their contents, the curation discipline |
 | **Technical / developer-tooling layer** | Developers, contributors, AI agents, self-host operators | **megálos** (runtime), **mikrós** (skills) | `megalos-server` Python package, schema, runtime tools, mikrós AGENTS.md, mikrós skills |
 
-A new surface added later is named by the layer it addresses, not by the surface it superficially resembles. A future authoring CLI is technical-layer (megálos-flavored); a future enterprise console is consumer-layer (agorá-flavored); a future AI-agent integration is developer-tooling-layer (mikrós-flavored). When ambiguity surfaces between layers, the audience is the disambiguator: if end users encounter it, it's consumer; if developers configure it, it's technical; if it serves authors of Library content, it's content layer.
+A new surface added later is named by the layer it addresses, not by the surface it superficially resembles. A future authoring CLI is technical-layer (megálos-flavored); a future enterprise console is consumer-layer (agorá-flavored); a future AI-agent integration is developer-tooling-layer (mikrós-flavored). When ambiguity surfaces between layers, the audience is the disambiguator: if end users encounter it, it's consumer; if developers configure it, it's technical; if it serves authors of Workflows content, it's content layer.
 
 **6. The brand inversion targets surfaces, not artifacts at rest.** Existing artifacts that reference "megálos" in the runtime sense remain correct. Documentation, code comments, ADRs, vision documents, and historical conversation logs that say "megálos" continue to say "megálos" where the reference is to the runtime. Surface-level marketing copy (catalog website headline, chat UI title bar, README hero text) gets agorá branding. The discipline is layer-targeted: rename consumer-facing surfaces; leave technical-layer references unchanged.
 
@@ -54,7 +60,7 @@ The brand inversion's operational rollout is predecessor-work execution, not str
 
 **Catalog website MVP** (predecessor work, before Phase H MH1) ships agorá-branded from inception. The website is greenfield; no rebrand work is needed because no prior consumer-surface artifact exists to migrate.
 
-**Existing megalos-* repos** (`megalos-writing`, `-analysis`, `-professional`) collapse into `agora-library` per ADR-009. The repo migration is the visible surface where "megalos-" prefix disappears. Folder names inside the aggregator carry no prefix per ADR-009's commitment 2.
+**Existing megalos-* repos** (`megalos-writing`, `-analysis`, `-professional`) collapse into the aggregator (`agora-creations/awesome-workflows` per ADR-009 commitment 1). The repo migration is the visible surface where "megalos-" prefix disappears. Folder names inside the aggregator carry no prefix per ADR-009's commitment 2.
 
 **Existing megalos-server** (Python package) keeps its name. Renaming the package is rejected because the package is the technical-layer artifact; the brand inversion does not reach into the technical layer (commitment 2). PyPI installation, import paths, and developer-facing references to `megalos_server` continue unchanged.
 
@@ -65,7 +71,7 @@ The brand inversion's operational rollout is predecessor-work execution, not str
 **What this commits megálos to.**
 
 - agorá-branded UI source in the chat UI repo (per ADR-007). Both self-host and hosted bundles serve identical agorá branding.
-- agorá-branded catalog website at `agora-library.dev`.
+- agorá-branded catalog website at `agora-workflows.dev` (per v7 §6.4).
 - `megalos-server` PyPI package keeps its name; `megalos-server` directory in the aggregator stays unchanged at the technical-layer level.
 - mikrós at `agora-creations/mikros` keeps its name and existing surface; no rebrand work.
 - README, marketing materials, and operator-facing copy get pass-by-pass updates per commitment 6's layer-targeted discipline.
@@ -79,6 +85,7 @@ The brand inversion's operational rollout is predecessor-work execution, not str
 - Renaming `megalos-server` the Python package. The technical layer's name is megálos and remains so; commitment 2's "demotes to technical name" means the name stays at the technical level, not that it disappears.
 - Renaming mikrós inward. Commitment 3 explicitly preserves mikrós's surface; the brand inversion does not reach developer-tooling layer.
 - Selling "agorá" as anything other than the consumer-facing surface. agorá is what end users see; documentation that refers to "the agorá runtime" or "the agorá schema" violates the layer discipline.
+- Selling "Workflows" as a runtime or technical-layer term. Workflows is the consumer-content brand; the runtime is megálos.
 
 ## 5. What would have to be true for this to be wrong
 
@@ -102,8 +109,8 @@ Three conditions, named honestly because the decision is not unconditional.
 ## 7. References
 
 - vision-v7 §6.2 (brand inversion — the strategic reasoning this ADR pins).
-- vision-v7 §3 (three-layer product structure: agorá / Library / megálos+mikrós).
-- vision-v7 §6.4 (external surface and `agora-library.dev` v1 commitment).
+- vision-v7 §3 (three-layer product structure: agorá / Workflows / megálos+mikrós).
+- vision-v7 §6.4 (external surface and `agora-workflows.dev` v1 commitment).
 - vision-v7 §9 Q1 + Q8 (superseded; this ADR is the replacement reasoning).
 - vision-v6 §9 Q1 (the resolution this ADR inverts; v6 carries an inline amendment-marker pointing here).
 - vision-v6 §9 Q8 (the deferral this ADR collapses; v6 carries an inline amendment-marker pointing here).
@@ -112,9 +119,9 @@ Three conditions, named honestly because the decision is not unconditional.
 - ADR-002 (`002-run-mode-session-persistence.md`) — naming references update from "megálos run mode" to "agorá run mode" in surface copy; technical-layer references stay megálos.
 - ADR-003 (`003-phase-j-shipping-decision.md`) — same surface-vs-technical update.
 - ADR-004 (`004-paid-vs-self-host-value-asymmetry.md`) — the (C)/(O)/(B) framework operationalizes commitment 1's "no capability withholding" principle; white-label support per §5/T1 would be an (O) feature.
-- ADR-005 (`005-library-entry-versioning-ux.md`) — references to "megálos UX" in surface copy update to "agorá UX"; runtime references stay megálos.
+- ADR-005 (`005-library-entry-versioning-ux.md`) — references to "megálos UX" in surface copy update to "agorá UX"; runtime references stay megálos. Per the 2026-04-27 amendment, ADR-005's vocabulary follows commitment 2 above (collection / Workflows).
 - ADR-006 (`006-artifact-retention-decoupling.md`) — same surface-vs-technical update.
-- ADR-009 (`009-repo-consolidation.md`) — sibling reversal; the repo-naming pattern (`agora-library` aggregator, no `megalos-` folder prefix) is the visible artifact of this brand inversion.
+- ADR-009 (`009-repo-consolidation.md`) — sibling reversal; the aggregator repo's name (pinned in ADR-009 commitment 1) and the lack of `megalos-` folder prefix are the visible artifacts of this brand inversion.
 
 ---
 

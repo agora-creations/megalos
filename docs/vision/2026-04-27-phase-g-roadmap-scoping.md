@@ -24,12 +24,12 @@ The scoping's purpose is to bound the pre-roadmap work — the subset that must 
 
 The pins Phase G's roadmap inherits from v7, v6, and the ADRs are not subjects of any (P) /discuss in this scoping. They are inputs.
 
-**Phase G presupposes predecessor work** (added 2026-04-27 post-v7). Per v7 §6.5, predecessor work — brand resolution, repo consolidation, catalog website MVP at `agora-library.dev` — lands before Phase G's MG1 begins. Phase G's chat UI assumes the catalog website already exists as the user's entry point: a user lands on the catalog, browses Library entries, clicks "Use in agorá," and is dropped into the chat UI with an entry already selected. MG1's foundation slice does not implement a Library-discovery surface within the chat UI itself; that lives in the catalog. Predecessor work is not Phase G; it is its own phase between current state (post-M012, post-Phase-F) and Phase G/Phase H.
+**Phase G presupposes predecessor work** (added 2026-04-27 post-v7). Per v7 §6.5, predecessor work — brand resolution, repo consolidation, catalog website MVP at `agora-workflows.dev` — lands before Phase G's MG1 begins. Phase G's chat UI assumes the catalog website already exists as the user's entry point: a user lands on the catalog, browses collections, clicks "Use in agorá," and is dropped into the chat UI with a collection already selected. MG1's foundation slice does not implement a Workflows-discovery surface within the chat UI itself; that lives in the catalog. Predecessor work is not Phase G; it is its own phase between current state (post-M012, post-Phase-F) and Phase G/Phase H.
 
-- **Configure-mode-naive UI design.** ADR-003 Clause 1. Library-entry picker is in scope; per-user customized-entry storage and embedded mikrós-reading agent are Phase J only. If Phase J reopens, it adapts to whatever Phase G has built; Phase G does not pre-adapt to Phase J.
+- **Configure-mode-naive UI design.** ADR-003 Clause 1. Collection picker is in scope; per-user customized-collection storage and embedded mikrós-reading agent are Phase J only. If Phase J reopens, it adapts to whatever Phase G has built; Phase G does not pre-adapt to Phase J.
 - **Analytics instrumentation at launch.** ADR-003 Clause 3. Two specific signals from Phase G ship: Shape-4 IDE-extension users exercising any in-product lightweight-customization affordance; Shape-4 churn at the customization wall vs Shape-2. Forward-looking on Phase G — not added at +5 months. Analytics is product instrumentation, not session data; its retention/privacy posture is independent of ADR-002's session TTL.
-- **Account-bound entry-version binding.** ADR-005 commitments 1+2+4. Per-(user, entry) version stored, prompt at session start with [Upgrade]/[Stay] (default Stay), critical-fix carve-out for CVE-class fixes, version-binding log as first-class feature.
-- **Session-resumption affordance.** ADR-002 §2 commitment 1. Single-click resume per Library entry the user has an in-flight session against. No ChatGPT-style sidebar. Bounded UI surface — one entry-point per Library entry the user is mid-session on.
+- **Account-bound collection-version binding.** ADR-005 commitments 1+2+4. Per-(user, collection) version stored, prompt at session start with [Upgrade]/[Stay] (default Stay), critical-fix carve-out for CVE-class fixes, version-binding log as first-class feature.
+- **Session-resumption affordance.** ADR-002 §2 commitment 1. Single-click resume per collection the user has an in-flight session against (v6 prose: "single-click resume per Library entry"). No ChatGPT-style sidebar. Bounded UI surface — one entry-point per collection the user is mid-session on.
 - **Same default behavior across paid and self-host.** ADR-004 (C)/(O)/(B) framework. Every Phase G surface design decision categorized: (C) Capability OSS in both tiers; (O) Operational layer paid-only; (B) Billing-bound paid-only by definition.
 - **Sequencing.** Phase G ships before Phase H completes and before Phase I. Pre-Phase-I, paid megálos run mode operates at effective Level 0 (no account binding) per ADR-002 §3. Phase G's chat UI exposes a "Resume in this tab" affordance using browser-local `session_id` storage. The UI must signal that account-bound resumption arrives with the managed-tier launch.
 - **`workflow_changed` envelope.** ADR-001. Propagates to chat UI as a session-killing terminal state. Recovery is `start_workflow` again.
@@ -49,7 +49,7 @@ Generated against v6, ADR-001 through ADR-005, the Phase H roadmap, and the Phas
 | E | Session-resumption affordance UX | ADR-002 §2 commitment 1 + §4 bound the shape, punt design. |
 | F | Pre-Phase-I transition UX | ADR-002 §3, named explicitly as Phase G design deliverable. |
 | G | Self-host auth contract: consumption of MH5's `X-Forwarded-User` | ADR-002 §3 + ADR-004 commitment 5 + Phase H MH5. |
-| H | Library entry version-prompt + version-display + version-binding log UX | ADR-005 §3, named as Phase G deliverable. |
+| H | Collection version-prompt + version-display + version-binding log UX | ADR-005 §3, named as Phase G deliverable (v6 prose: "Library entry"). |
 | I | Analytics instrumentation surface for ADR-003 Clause 3 | ADR-003 Clause 3 + implementation notes 1 and 2. |
 | J | `workflow_changed` envelope UX in the chat | ADR-001 envelope shape; UX surface unaddressed. |
 | K | Library catalog discovery UI | v6 §3.1 names the curated catalog; megálos's surface for browsing it not specified. |
@@ -93,7 +93,7 @@ Largest milestone — establishes the entire technical substrate. Highest-risk: 
 - **`megalos-server` static-bundle integration** per ADR-007 commitment 2: UI ships as Python package data; `megalos-server` serves the static assets from its existing HTTP layer.
 - **Hosted-backend stub**: minimal MCP-over-HTTP transport on the outer edge for development and verification of the contract-singularity claim. The full proxy implementation against per-entry endpoints is operator commercial code (O), parallel to Phase I.
 - **BYOK API key entry surface** (L). Pre-Phase-I client-side storage; provider validation; settings page.
-- **Basic connection to one Library entry**: entry-id parameter via URL; the chat UI accepts an entry parameter from the catalog website's "Use in agorá" landing flow. The catalog website itself is predecessor work, not Phase G.
+- **Basic connection to one collection**: entry-id parameter via URL; the chat UI accepts an entry parameter from the catalog website's "Use in agorá" landing flow. The catalog website itself is predecessor work, not Phase G.
 - **Analytics emission scaffolding** per ADR-011: chat UI client + backend handler + `analytics_events` table schema. Per-event emitters are added in subsequent milestones as their corresponding features land.
 - **"Customize this entry" affordance** per ADR-011 commitment 3: ~30 LOC; click event captured.
 
@@ -101,7 +101,7 @@ Largest milestone — establishes the entire technical substrate. Highest-risk: 
 
 ### MG2 — Run-mode chat loop
 
-The user-visible execution surface. By end of MG2 a user can run a Library entry from start to artifact via the chat UI.
+The user-visible execution surface. By end of MG2 a user can run a collection from start to artifact via the chat UI.
 
 - **Directive/gate/anti-pattern run loop** in the chat UI: orchestrates the sequence of `get_state` → `get_guidelines` → LLM call browser-direct → `submit_step` per ADR-010's MCP-over-HTTP client.
 - **Progressive tool disclosure** per v7 §2 + v6 §2 carryover. Tool definitions loaded incrementally rather than upfront.
@@ -119,7 +119,7 @@ Lightest milestone. The "switch entry" affordance and the configure-mode-naive p
 - **"Switch entry" affordance** per ADR-010 commitment 8: surfaces the user's account-bound entry list (resolved by the backend per ADR-005); does not duplicate the catalog website's discovery surface.
 - **Configure-mode-naive picker** per ADR-003 Clause 1. The picker is in scope; per-user customized-entry storage and embedded mikrós-reading agent are Phase J only (deferred per ADR-003).
 - **Multi-entry browser tabs** per ADR-010 commitment 7: each tab is one MCP-over-HTTP session; no in-product tab manager. Backend tracks per-(user, entry) per ADR-002.
-- **K folds in here**: the catalog website (predecessor work, at `agora-library.dev`) is the discovery surface; the chat UI's "switch entry" is the in-product affordance only. K is closed.
+- **K folds in here**: the catalog website (predecessor work, at `agora-workflows.dev`) is the discovery surface; the chat UI's "switch entry" is the in-product affordance only. K is closed.
 - **Per-event emitters land**: `entry_switched` per ADR-011.
 
 *Slices: ~3–4.*
@@ -129,7 +129,7 @@ Lightest milestone. The "switch entry" affordance and the configure-mode-naive p
 Bundles ADR-005 (H) + ADR-002 (E, F) + ADR-006 (artifact gallery). All three are surfaces the user sees about state continuity across sessions, versions, and artifacts; the design coherence wins from bundling.
 
 - **Version-prompt + display + binding-log UX** per ADR-005 §2 commitments 1+2+4 (H): account-bound version binding; non-blocking session-start prompt with `[Upgrade] / [Stay on V_user]` (default Stay); critical-fix carve-out auto-migrates; version-binding log as first-class feature.
-- **Single-click resume affordance** per ADR-002 §2 commitment 1 (E): one entry-point per Library entry the user has an in-flight session against. No ChatGPT-shaped sidebar.
+- **Single-click resume affordance** per ADR-002 §2 commitment 1 (E): one entry-point per collection the user has an in-flight session against. No ChatGPT-shaped sidebar.
 - **Pre-Phase-I "Resume in this tab" affordance + transition UX** per ADR-002 §3 (F): browser-local `session_id` resumption during the Phase G → Phase I window; clear in-product affordance signaling that account-bound resumption arrives with the managed-tier launch.
 - **Artifact gallery / saved-outputs surface** per ADR-006: the user-captured-explicit retrieval surface; UX distinguishes "your conversation expired" from "your saved artifacts are still here."
 - **Per-event emitters land**: `version_prompt_responded` per ADR-011 commitment 6 — the only direct signal on whether users actually read or auto-dismiss the version-binding prompt.
@@ -258,7 +258,7 @@ Each (P) /discuss output is recorded as an ADR or a v6 §9 amendment per the pre
 
 ## 9. References
 
-- **vision-v7** ([`2026-04-27-megalos-vision-v7.md`](./2026-04-27-megalos-vision-v7.md)) — current canonical vision; supersedes v6 with brand inversion (agorá as consumer brand) + repo consolidation. The chat UI is now agorá-branded; the consumer surface lives at `agora-library.dev`.
+- **vision-v7** ([`2026-04-27-megalos-vision-v7.md`](./2026-04-27-megalos-vision-v7.md)) — current canonical vision; supersedes v6 with brand inversion (agorá as consumer brand) + repo consolidation. The chat UI is now agorá-branded; the consumer surface lives at `agora-workflows.dev`.
 - vision-v6 ([`2026-04-26-megalos-vision-v6.md`](./2026-04-26-megalos-vision-v6.md)) — historical reference; the original governing vision when this scoping was drafted. v6 §3.2, §6.5, §7, §9 carry forward into v7 with surface-naming updates.
 - ADR-001 ([`docs/adr/001-workflow-versioning.md`](../adr/001-workflow-versioning.md)) — `workflow_changed` envelope inherited by the agorá chat UI.
 - ADR-002 ([`docs/adr/002-run-mode-session-persistence.md`](../adr/002-run-mode-session-persistence.md)) — Phase G /discuss BLOCKER (commitment 4, resolved by ADR-006); session-resumption affordance; pre-Phase-I transition UX; self-host auth contract source.
