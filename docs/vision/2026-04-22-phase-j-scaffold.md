@@ -1,6 +1,6 @@
 # Phase J — Visual Studio, Template Library, Consumer Onramp (Strategic Scaffold)
 
-**Status:** Pre-scoping strategic scaffold. **Not a roadmap.** Reserves strategic space for Phase J work, pins the invariants from vision-v5 that bind its eventual shape, and enumerates the open questions that must be resolved before milestone-level scoping becomes defensible. A proper Phase J roadmap in the shape of the Phase H document is a future artifact, written when Phase H is closer to shipping and the open questions in §7 have early answers.
+**Status:** Superseded for the shipping-decision question by [`docs/adr/003-phase-j-shipping-decision.md`](../adr/003-phase-j-shipping-decision.md) (Phase J deferred indefinitely; reopens per T1/T2/T3 in ADR-003). Scope amended by [`2026-04-26-megalos-vision-v6.md`](./2026-04-26-megalos-vision-v6.md) §6.4 (configure mode replaces visual studio; consumer-subscription onramp removed; template library moves to OSS Library). Retained for historical reference; the five-irreducible-components and guardrail-derived analysis in §2-§3 remain valid framing if Phase J reopens. Original status: pre-scoping strategic scaffold under vision-v5.
 **Author:** Diego Marono (with strategic review)
 **Date:** 2026-04-22
 **Governing vision:** [`2026-04-22-megalos-vision-v5.md`](./2026-04-22-megalos-vision-v5.md). Vision-v5 §3 introduces Shape 5 and commits megálos to serving it; this document is the first downstream consequence of that commitment.

@@ -1,6 +1,6 @@
 # megálos — Vision v5
 
-**Status:** Canonical. Supersedes [`2026-04-15-megalos-vision-v4.md`](./2026-04-15-megalos-vision-v4.md), which becomes a historical document. Where v4 and v5 conflict, v5 governs.
+**Status:** Superseded by [`2026-04-26-megalos-vision-v6.md`](./2026-04-26-megalos-vision-v6.md) on 2026-04-27. Retained for historical reference. Where v5 and v6 conflict, v6 governs. Previously canonical, superseding [`2026-04-15-megalos-vision-v4.md`](./2026-04-15-megalos-vision-v4.md).
 **Author:** Diego Marono (with strategic review)
 **Date:** 2026-04-22
 **Principal change from v4:** Reverses v4's rejection of a no-code visual authoring studio, introduces a fifth user shape (non-technical authors), and pins six mechanical guardrails that prevent the failure mode v4 was originally guarding against.
