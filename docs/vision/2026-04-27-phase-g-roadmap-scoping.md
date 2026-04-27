@@ -63,13 +63,13 @@ Generated against v6, ADR-001 through ADR-005, the Phase H roadmap, and the Phas
 |----|----------|-------|-----------|
 | A | Tech stack / framework | (R) ✓ resolved jointly with B 2026-04-27 → [ADR-007](../adr/007-phase-g-chat-ui-stack.md) | Wrong tech stack is recoverable; milestones look the same under React vs Svelte at the level the roadmap describes them. Decided at MG1 kickoff, paired with B. *Outcome: Svelte 5 + Vite + TypeScript, plain SPA, no SSR.* |
 | **B** | Self-host distribution shape | **(P)** ✓ resolved jointly with A 2026-04-27 → [ADR-007](../adr/007-phase-g-chat-ui-stack.md) | Single-binary vs two-artifacts vs static-bundle-served-by-runtime materially changes self-host distribution milestone scope, self-host auth integration (G), and packaging discipline. Paired with A. *Outcome: single static bundle, two delivery paths — self-host bundles into `megalos-server` as package data; hosted serves same bundle from agorá's CDN with operator's commercial wrapper backend.* |
-| **C** | Connection model | **(P)** | Most load-bearing of the twelve. Operator-hosted catalog vs user-managed connection registry vs hybrid produces very different milestone scope for "Library picker," different paid-vs-self-host story (ADR-004), different binding to ADR-003 Clause 1's configure-mode-naive picker. K folds into whatever C settles. |
+| **C** | Connection model | **(P)** ✓ resolved 2026-04-27 → [ADR-010](../adr/010-phase-g-connection-model.md) | Most load-bearing of the twelve. Operator-hosted catalog vs user-managed connection registry vs hybrid produces very different milestone scope for "Library picker," different paid-vs-self-host story (ADR-004), different binding to ADR-003 Clause 1's configure-mode-naive picker. K folds into whatever C settles. *Outcome: Pattern B (single backend per session) with MCP-over-HTTP refinement; thin TS MCP client in the chat UI; cross-cutting concerns in the backend layer; per-folder MCP endpoints retained for AI-agent consumption; "switch entry" affordance backed by ADR-005 account-bound entry list (K folds in here).* |
 | **D** | Artifact retention decoupling | **(P)** ✓ resolved 2026-04-27 → [ADR-006](../adr/006-artifact-retention-decoupling.md) | Pre-pinned by ADR-002 §2 commitment 4 as a Phase G /discuss BLOCKER. Investigation, not strategic position-finding. *Outcome: decoupling buildable at ~1 milestone-equivalent via `ArtifactStore` parallel to `SessionStore`, user-captured-explicit model. ADR-002 holds.* |
 | E | Session-resumption affordance UX | (S) | ADR-002 commits the surface bound; rest is design detail. Depends on C (where the affordance lives). |
 | F | Pre-Phase-I transition UX | (S) | Small surface — copy + browser-local `session_id` "Resume in this tab" affordance. Fits in resumption slice. |
 | G | Self-host auth contract | (S) | Consumption of MH5's already-defined header contract. Slice-gate work; depends on B. |
 | H | Version-prompt + display + log UX | (R) | ADR-005 commits the three surfaces; design space is bounded. Roadmap decides whether own milestone or distributed. Design itself is per-slice. |
-| **I** | Analytics instrumentation surface | **(P)** | "What gets instrumented" is design, but the privacy posture for analytics is genuinely strategic and ADR-003 Clause 3 implementation note 2 explicitly distinguishes it from session-data retention. Depends on C. |
+| **I** | Analytics instrumentation surface | **(P)** ✓ resolved 2026-04-27 → [ADR-011](../adr/011-phase-g-analytics-instrumentation.md) | "What gets instrumented" is design, but the privacy posture for analytics is genuinely strategic and ADR-003 Clause 3 implementation note 2 explicitly distinguishes it from session-data retention. Depends on C. *Outcome: 13-month retention ceiling (delete-at framing); self-host opt-in only; behavioral-proxy segmentation with sticky tagging; custom emit-to-Postgres at v1 with PostHog migration triggers; 7-event schema; HMAC-SHA-256 with per-deployment salt for account_id_hash; analytics-session-id namespace-distinct from ADR-002.* |
 | J | `workflow_changed` envelope UX | (S) | ADR-001 ships the envelope; UI surfaces the terminal-state error. Standard error-handling slice work. |
 | K | Library catalog discovery UI | (R) | At v1 Library scale (5–10 entries per v6 §6.1), discovery is a static list with descriptions. Folds into C's milestone. |
 | L | BYOK API key management UX | (S) | Pre-Phase-I client-side storage, provider validation, settings page. Narrow, well-precedented. Post-Phase-I behavior is Phase I scoping. |
@@ -109,14 +109,21 @@ This breakdown is the scoping's working model. The roadmap drafting session may 
                    │
                    ▼
         ┌─────────────────────┐
-        │ C /discuss          │  ◄── next; load-bearing
+        │ C /discuss          │  ✓ resolved 2026-04-27 → ADR-010
         │ connection model    │
         └──────────┬──────────┘
                    │
                    ▼
         ┌─────────────────────┐
-        │ I /discuss          │  ◄── after C
+        │ I /discuss          │  ✓ resolved 2026-04-27 → ADR-011
         │ analytics posture   │
+        └──────────┬──────────┘
+                   │
+                   ▼
+        ┌─────────────────────┐
+        │ Synthesis pass      │  ◄── next
+        │ (four ADRs +        │
+        │  rough 5-MG shape)  │
         └──────────┬──────────┘
                    │
                    ▼
@@ -176,6 +183,8 @@ Each (P) /discuss output is recorded as an ADR or a v6 §9 amendment per the pre
 - ADR-007 ([`docs/adr/007-phase-g-chat-ui-stack.md`](../adr/007-phase-g-chat-ui-stack.md)) — A+B's resolution; Svelte 5 + Vite + TS, single static bundle, two delivery paths.
 - ADR-008 ([`docs/adr/008-brand-architecture.md`](../adr/008-brand-architecture.md)) — agorá as consumer-facing brand; megálos demoted to runtime technical name; three-layer architecture (consumer/content/technical).
 - ADR-009 ([`docs/adr/009-repo-consolidation.md`](../adr/009-repo-consolidation.md)) — `agora-creations/agora-library` aggregator with sibling folders; per-folder MCP endpoints + per-folder versioning preserved.
+- ADR-010 ([`docs/adr/010-phase-g-connection-model.md`](../adr/010-phase-g-connection-model.md)) — C's resolution; Pattern B (single backend per session) with MCP-over-HTTP refinement; thin TS MCP client; backend-mediated cross-cutting concerns.
+- ADR-011 ([`docs/adr/011-phase-g-analytics-instrumentation.md`](../adr/011-phase-g-analytics-instrumentation.md)) — I's resolution; 13-month retention ceiling (delete-at framing); self-host opt-in; sticky-tagging segmentation; custom emit-to-Postgres at v1; 7-event schema with HMAC-SHA-256 hash.
 - Phase H roadmap ([`2026-04-22-phase-h-distribution-hardening-roadmap.md`](./2026-04-22-phase-h-distribution-hardening-roadmap.md)) — structural template for roadmap shape; MH1 deployment recipes; MH5 header middleware.
 - Phase J scaffold ([`2026-04-22-phase-j-scaffold.md`](./2026-04-22-phase-j-scaffold.md)) — superseded for the shipping decision by ADR-003; "five irreducible components" §2 framing as a model for enumerating Phase G's irreducible components.
 
