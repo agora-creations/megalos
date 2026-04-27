@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-26
 **Supersedes:** vision-v5 (2026-04-22)
-**Status:** Draft, pending operator review. Amended 2026-04-26 to reflect findings of the OAuth feasibility investigation (`docs/discovery/2026-04-26-oauth-feasibility-investigation.md`); see §6.4, §3.2, §4 (Shape 5), and §9 Q2.
+**Status:** Canonical. Promoted from draft on 2026-04-27 after OAuth-investigation amendment (§6.4, §9 Q2) and resolution of §9 Q9 (see [ADR-002](../adr/002-run-mode-session-persistence.md)) and §9 Q11 (see [ADR-003](../adr/003-phase-j-shipping-decision.md)). Where v5 and v6 conflict, v6 governs.
 
 ---
 

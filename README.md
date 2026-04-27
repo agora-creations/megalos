@@ -65,7 +65,7 @@ mcp.run(transport="streamable-http")
 |-------|------------|--------|
 | **megálos** (this repo) | YAML schema, MCP server runtime (`megalos-server` package), validator, visualization, dry-run inspector, JSON Schema export | live |
 | **megálos-{domain}** | Per-domain MCP servers built on the runtime — each pins a `megalos-server` version and ships its own workflow set | live: writing, analysis, professional |
-| **Reference client** | A megálos-aware chat client for end-users (Phase G, vision-v5 §3 Shape 2) | deferred |
+| **Reference client** | A megálos-aware chat client for end-users (Phase G, vision-v6 §3.2 + §4 Shape 2) | deferred |
 
 ## The YAML schema
 
@@ -179,9 +179,9 @@ Authoring mechanics — directive quality, context injection, gates, branches, s
 | Phase G — reference client | Megálos-aware chat client for end-users | deferred |
 | Phase H — distribution hardening | Pluggable backends + multi-replica deploy story for self-hosters (Shape 3) | scaffolded — see [`docs/vision/2026-04-22-phase-h-distribution-hardening-roadmap.md`](docs/vision/2026-04-22-phase-h-distribution-hardening-roadmap.md) |
 | Phase I — Horizon Developer+ | Managed hosting tier for Shape 4 | deferred |
-| Phase J — visual studio + template library + consumer onramp | Shape 5 surface (vision-v5 §3) | strategic scaffold only — see [`docs/vision/2026-04-22-phase-j-scaffold.md`](docs/vision/2026-04-22-phase-j-scaffold.md) |
+| Phase J — configure mode | Shape 5 surface (vision-v6 §3.2 + §4) | deferred indefinitely — see [`docs/adr/003-phase-j-shipping-decision.md`](docs/adr/003-phase-j-shipping-decision.md) |
 
-The canonical strategic document is [`docs/vision/2026-04-22-megalos-vision-v5.md`](docs/vision/2026-04-22-megalos-vision-v5.md). Five user shapes, six guardrails, the rationale for every phase above.
+The canonical strategic document is [`docs/vision/2026-04-26-megalos-vision-v6.md`](docs/vision/2026-04-26-megalos-vision-v6.md). Five user shapes, six guardrails, the rationale for every phase above.
 
 ## License
 
