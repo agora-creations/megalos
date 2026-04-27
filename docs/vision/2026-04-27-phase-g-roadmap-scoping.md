@@ -1,6 +1,6 @@
 # Phase G — Roadmap Scoping
 
-**Status:** Scoping document. Bounds the pre-roadmap work for Phase G. The Phase G roadmap document itself is drafted after the four (P) /discusses identified below resolve. Supersedes nothing; supplemented by ADRs that emerge from each (P) /discuss.
+**Status:** Scoping document with synthesis applied. The four (P) /discusses (D, A+B, C, I) resolved 2026-04-27 → ADRs 006, 007, 010, 011. Synthesis pass crystallized the milestone breakdown in §5 (amended in place; the rough breakdown was replaced with the post-synthesis version). The Phase G roadmap document itself is drafted next, consuming this document plus the four ADRs as input.
 **Author:** Diego Marono (with strategic review)
 **Date:** 2026-04-27
 **Governing vision:** [`2026-04-27-megalos-vision-v7.md`](./2026-04-27-megalos-vision-v7.md). v6 was the governing vision when this scoping was originally drafted earlier on 2026-04-27; v7 superseded v6 the same day with a brand-architecture inversion and repo-consolidation reversal that emerged in the predecessor /discuss. The scoping's structural analysis stands unchanged — the four (P)s, three (R)s, and five (S)s carry forward; only the consumer-surface naming (megálos → agorá) and Phase G's prerequisite (predecessor work introduced) shift between v6 and v7. Inline updates below.
@@ -78,19 +78,105 @@ Generated against v6, ADR-001 through ADR-005, the Phase H roadmap, and the Phas
 
 ---
 
-## 5. Rough milestone breakdown
+## 5. Milestone breakdown (crystallized after the four (P)s landed)
 
-Five milestones, mirroring Phase H's 5–6 shape. Refined at the Phase G roadmap drafting session after the four (P)s land.
+The four (P) /discusses have resolved (D → ADR-006; A+B → ADR-007; C → ADR-010; I → ADR-011). The rough five-milestone shape from the scoping pass holds; the four ADRs add specifics, shift one surface (artifact gallery) into MG4, and pin where analytics threads through. Synthesized shape below.
 
-- **MG1 — Foundation.** Tech-stack scaffold (A+B), FastMCP Client integration, BYOK key entry (L), basic connection to one Library entry. Smallest viable shell that runs an entry end-to-end.
-- **MG2 — Run-mode chat loop.** Directive/gate/anti-pattern run loop, progressive tool disclosure, `workflow_changed` envelope UX (J), step-state rendering.
-- **MG3 — Catalog and picker.** Library entry catalog, picker affordance, configure-mode-naive picker per ADR-003 Clause 1; K folds in here.
-- **MG4 — Version-awareness and session-resumption UX.** Per ADR-005 (H) and ADR-002 (E, F). Bundle because both are "what the user sees about persistence/state continuity across sessions" and likely share design surface.
-- **MG5 — Self-host distribution and auth integration.** Packaging (B's downstream), `X-Forwarded-User` consumption (G), deployment recipes coupling with Phase H MH1 conventions.
+The synthesis input is "the four ADRs plus the Phase G scoping doc's rough five-milestone shape" per the operator's pre-synthesis discipline note. Synthesis is not re-deriving MG1–MG5 from scratch; it is crystallizing the rough shape against the four (P) decisions.
 
-**Analytics instrumentation (I) runs continuously across MG1–MG5** — ADR-003 Clause 3 binds "from launch," not "as MG6." MH6-style discipline applied to Phase G: every milestone slice carries its own instrumentation per the framework decided in (P)-discuss I.
+### MG1 — Foundation
 
-This breakdown is the scoping's working model. The roadmap drafting session may collapse, split, or re-sequence based on what the four (P)s surface.
+Largest milestone — establishes the entire technical substrate. Highest-risk: closes the longest period before user-visible value lands and gates every downstream milestone.
+
+- **Tech-stack scaffold** per ADR-007: Svelte 5 + Vite + TypeScript SPA, static-build target, agorá-branded UI from inception per ADR-008.
+- **Thin TypeScript MCP-over-HTTP client** per ADR-010 commitment 2: hand-written, ~300–500 LOC, no framework dependency. **Spike-verified at MG1 kickoff** — if the spike overruns the budget, ADR-010 T1 fires and FastMCP-JS evaluation begins. The spike is the gating slice; everything downstream depends on it.
+- **`megalos-server` static-bundle integration** per ADR-007 commitment 2: UI ships as Python package data; `megalos-server` serves the static assets from its existing HTTP layer.
+- **Hosted-backend stub**: minimal MCP-over-HTTP transport on the outer edge for development and verification of the contract-singularity claim. The full proxy implementation against per-entry endpoints is operator commercial code (O), parallel to Phase I.
+- **BYOK API key entry surface** (L). Pre-Phase-I client-side storage; provider validation; settings page.
+- **Basic connection to one Library entry**: entry-id parameter via URL; the chat UI accepts an entry parameter from the catalog website's "Use in agorá" landing flow. The catalog website itself is predecessor work, not Phase G.
+- **Analytics emission scaffolding** per ADR-011: chat UI client + backend handler + `analytics_events` table schema. Per-event emitters are added in subsequent milestones as their corresponding features land.
+- **"Customize this entry" affordance** per ADR-011 commitment 3: ~30 LOC; click event captured.
+
+*Slices: ~5–7. Largest milestone by LOC and risk.*
+
+### MG2 — Run-mode chat loop
+
+The user-visible execution surface. By end of MG2 a user can run a Library entry from start to artifact via the chat UI.
+
+- **Directive/gate/anti-pattern run loop** in the chat UI: orchestrates the sequence of `get_state` → `get_guidelines` → LLM call browser-direct → `submit_step` per ADR-010's MCP-over-HTTP client.
+- **Progressive tool disclosure** per v7 §2 + v6 §2 carryover. Tool definitions loaded incrementally rather than upfront.
+- **Step-state rendering**: the chat UI surfaces what step is active, what gates apply, what anti-patterns were flagged.
+- **`workflow_changed` envelope UX** (J) per ADR-001: terminal-state rendering with clear recovery path ("start a new session").
+- **`generate_artifact` integration** + **write to `ArtifactStore`** per ADR-006: the artifact-capture trigger persists the result to the user-bound `ArtifactStore`. Phase G's chat UI emits the capture; backend writes the row.
+- **Per-event emitters land**: `session_started`, `session_progressed`, `session_completed` per ADR-011 commitment 6.
+
+*Slices: ~4–5.*
+
+### MG3 — Catalog and picker (configure-mode-naive)
+
+Lightest milestone. The "switch entry" affordance and the configure-mode-naive picker per ADR-003 Clause 1.
+
+- **"Switch entry" affordance** per ADR-010 commitment 8: surfaces the user's account-bound entry list (resolved by the backend per ADR-005); does not duplicate the catalog website's discovery surface.
+- **Configure-mode-naive picker** per ADR-003 Clause 1. The picker is in scope; per-user customized-entry storage and embedded mikrós-reading agent are Phase J only (deferred per ADR-003).
+- **Multi-entry browser tabs** per ADR-010 commitment 7: each tab is one MCP-over-HTTP session; no in-product tab manager. Backend tracks per-(user, entry) per ADR-002.
+- **K folds in here**: the catalog website (predecessor work, at `agora-library.dev`) is the discovery surface; the chat UI's "switch entry" is the in-product affordance only. K is closed.
+- **Per-event emitters land**: `entry_switched` per ADR-011.
+
+*Slices: ~3–4.*
+
+### MG4 — Persistence and continuity UX
+
+Bundles ADR-005 (H) + ADR-002 (E, F) + ADR-006 (artifact gallery). All three are surfaces the user sees about state continuity across sessions, versions, and artifacts; the design coherence wins from bundling.
+
+- **Version-prompt + display + binding-log UX** per ADR-005 §2 commitments 1+2+4 (H): account-bound version binding; non-blocking session-start prompt with `[Upgrade] / [Stay on V_user]` (default Stay); critical-fix carve-out auto-migrates; version-binding log as first-class feature.
+- **Single-click resume affordance** per ADR-002 §2 commitment 1 (E): one entry-point per Library entry the user has an in-flight session against. No ChatGPT-shaped sidebar.
+- **Pre-Phase-I "Resume in this tab" affordance + transition UX** per ADR-002 §3 (F): browser-local `session_id` resumption during the Phase G → Phase I window; clear in-product affordance signaling that account-bound resumption arrives with the managed-tier launch.
+- **Artifact gallery / saved-outputs surface** per ADR-006: the user-captured-explicit retrieval surface; UX distinguishes "your conversation expired" from "your saved artifacts are still here."
+- **Per-event emitters land**: `version_prompt_responded` per ADR-011 commitment 6 — the only direct signal on whether users actually read or auto-dismiss the version-binding prompt.
+
+*Slices: ~4–5. **Possible split point**: if MG4 runs heavy at design time, split into MG4a (version + resumption) and MG4b (artifact gallery). Decision at MG3 close; not pre-committed.*
+
+### MG5 — Self-host distribution and auth integration
+
+By end of MG5, self-host single-binary works end-to-end per ADR-007 commitment 2.
+
+- **Package-data bundling**: UI ships as Python package data inside `megalos-server`; `pip install megalos-server` ships runtime + UI together.
+- **`X-Forwarded-User` consumption** (G) per Phase H MH5 + ADR-002 §3: chat UI consumes the header populated by upstream proxy auth; behavior on absence is documented (default to anonymous-equivalent or `deny-anonymous` per MH5 envvar).
+- **Phase H MH1 deployment-recipes coupling**: the static-bundle integration plays cleanly with MH1's Docker / Compose / K8s / Helm recipes. `pip install megalos-server`, run, browse to `localhost`, see agorá UI.
+- **Self-host analytics opt-in envvar surface** per ADR-011 commitment 2: `MEGALOS_ANALYTICS_ENABLED=false` default; emission target configurable; admin documentation explains the opt-in path.
+- **`MEGALOS_ANALYTICS_RETENTION_DAYS`** envvar surfaced with admin documentation.
+
+*Slices: ~3–4.*
+
+### Cross-cutting: analytics instrumentation across MG1–MG5
+
+Per ADR-011 + ADR-003 Clause 3 implementation note 1: instrumentation is launch-time, not retroactive. Each milestone's slices carry their own emitters per ADR-011 commitment 6. Not a separate milestone — analytics is a discipline applied across all five, mirroring Phase H MH6's "lands continuously alongside MH2–MH5" pattern.
+
+| Event | Lands in |
+|-------|----------|
+| `session_started`, `session_progressed`, `session_completed` | MG2 |
+| `customize_intent_clicked` | MG1 (affordance ships at MG1) |
+| `file_download_used` | MG1 (chat UI lands user from "Use in agorá" flow) |
+| `entry_switched` | MG3 |
+| `version_prompt_responded` | MG4 |
+
+The analytics scaffolding (chat UI client + backend handler + Postgres table) lands at MG1; per-event emitters land alongside their feature milestones.
+
+### Cross-cutting: hosted commercial backend (parallel to Phase I)
+
+The (O) operator commercial code that proxies MCP-over-HTTP to per-entry endpoints, layers ADR-002 / ADR-003 / ADR-005 / ADR-006 cross-cutting concerns, hosts the `analytics_events` Postgres table, and runs the 13-month retention enforcement job is **parallel work, not part of Phase G OSS scope** per ADR-007 commitment 7 + ADR-010 commitment 4. Phase G ships the OSS pieces; Phase I scaffolding consumes them.
+
+### Summary
+
+| Milestone | Slices | Risk | What lands |
+|-----------|--------|------|-----------|
+| MG1 | ~5–7 | High | Foundation; thin TS MCP client (spike-gated); static-bundle integration; backend stub; analytics scaffolding; "customize" affordance |
+| MG2 | ~4–5 | Medium | Run-mode chat loop; `generate_artifact` + `ArtifactStore`; first event emitters |
+| MG3 | ~3–4 | Low | Switch-entry affordance; configure-mode-naive picker (K folds in) |
+| MG4 | ~4–5 (possibly split) | Medium | Version + resumption + artifact-gallery UX |
+| MG5 | ~3–4 | Low–medium | Self-host distribution + auth; analytics envvars |
+
+**Total: ~20 slices across 5 milestones**, 21–22 if MG4 splits. Sole-author estimated at 4–6 months sequenced after predecessor work lands per v7 §6.5. The Phase G roadmap document drafted from this synthesis pins MG1–MG5 into per-slice work plans.
 
 ---
 
@@ -121,14 +207,14 @@ This breakdown is the scoping's working model. The roadmap drafting session may 
                    │
                    ▼
         ┌─────────────────────┐
-        │ Synthesis pass      │  ◄── next
+        │ Synthesis pass      │  ✓ resolved 2026-04-27 → §5 amended in place
         │ (four ADRs +        │
         │  rough 5-MG shape)  │
         └──────────┬──────────┘
                    │
                    ▼
         ┌─────────────────────┐
-        │ Phase G roadmap     │
+        │ Phase G roadmap     │  ◄── next
         │ drafting            │
         └─────────────────────┘
 ```
