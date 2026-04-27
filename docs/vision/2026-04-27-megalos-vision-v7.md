@@ -1,14 +1,16 @@
-# megálos vision-v7: agorá, Workflows, and megálos
+# megálos vision-v7: agorá, Conversations, and megálos
 
 **Date:** 2026-04-27
 **Supersedes:** vision-v6 (2026-04-26)
 **Status:** Canonical. Promoted from draft on 2026-04-27 after the predecessor /discuss session resolved the brand-architecture and repo-topology open questions. Where v6 and v7 conflict, v7 governs. v6 is retained as historical reference.
 
+> **Update (2026-04-28).** The content-layer brand was renamed from **Workflows** to **Conversations** (D061). The catalog domain is now `agora-conversations.dev` (was `agora-workflows.dev`); the aggregator repo is `agora-creations/awesome-conversations` (was `awesome-workflows`); the catalog site repo is `agora-creations/agora-conversations-site` (was `agora-workflows-site`). The rebrand is brand/consumer-layer only — the megálos-server technical primitives (`workflow_dir` parameter, `list_workflows` tool, workflow YAMLs) and the folder-unit term **collection** are unchanged. The body of v7 below has been refreshed in place to use **Conversations** for brand-sense uses and the new domain/repo names. Where the prose still says "workflows" (lowercase) it refers to the runtime/schema primitive (a workflow YAML) and is intentionally retained. ADR-008 and ADR-009 are updated to match. See D061 for the rationale.
+
 ---
 
 ## 1. What v7 is
 
-Vision-v6 re-centered the product narrative on two pillars — Workflows (a curated catalog of MCP-server collections, called "the Library" in v6 prose) and megálos (a hosted chat UI in which users pick a collection and run its workflows under BYOK inference). The technical thesis carried forward from v5; the commercial story sharpened.
+Vision-v6 re-centered the product narrative on two pillars — Conversations (a curated catalog of MCP-server collections, called "the Library" in v6 prose, briefly renamed to "Workflows" in the original v7 draft, and renamed to **Conversations** in the post-v7 D061 rebrand) and megálos (a hosted chat UI in which users pick a collection and run its workflows under BYOK inference). The technical thesis carried forward from v5; the commercial story sharpened.
 
 Vision-v7 makes three changes to v6: two reversals and one addition. The technical thesis is unchanged. The five customer shapes are unchanged. Every v6 guardrail is preserved.
 
@@ -16,7 +18,7 @@ Vision-v7 makes three changes to v6: two reversals and one addition. The technic
 
 **Reversal 2 — brand inversion.** v6 §9 Q1 resolved "megálos" as the consumer-facing brand of the paid product, with `agora-creations` retained as the GitHub-organization brand and the legal/billing entity deferred. v7 inverts this: **agorá** becomes the consumer-facing brand for both surfaces (catalog website and chat UI) and both deployments (self-host and hosted). megálos demotes to the runtime's technical name — `megalos-server` at the package level, "the megálos runtime" in technical contexts where disambiguation matters. mikrós similarly stays at the developer-tooling layer under existing naming. `agora-creations` remains the GitHub-organization brand. A self-hoster running `pip install megalos-server` and hitting `localhost` in their browser sees agorá branding — the GitLab-analogy: product identity travels with the bundle, not with the operator.
 
-**Addition — file-download consumption path.** v6 framed collection consumption as MCP-connect-only: the user (or their AI agent) connects to a deployed MCP server endpoint and runs the collection's workflows. v7 adds an `npx`-style install path that drops a collection's YAML directly into the user's local `megalos-server` workflows directory, where it is loaded by the runtime exactly as a hand-authored workflow would be. The hosted-side equivalent is a "Use in agorá" affordance on the catalog website that adds the collection to the user's hosted agorá account. Two consumption paths, one set of Workflows, no schema change.
+**Addition — file-download consumption path.** v6 framed collection consumption as MCP-connect-only: the user (or their AI agent) connects to a deployed MCP server endpoint and runs the collection's workflows. v7 adds an `npx`-style install path that drops a collection's YAML directly into the user's local `megalos-server` workflows directory, where it is loaded by the runtime exactly as a hand-authored workflow would be. The hosted-side equivalent is a "Use in agorá" affordance on the catalog website that adds the collection to the user's hosted agorá account. Two consumption paths, one set of Conversations, no schema change.
 
 The conceptual analog explicitly validated by the operator: VoltAgent's `awesome-design-md` aggregator repo plus its `getdesign.md` website. One aggregator, collection-per-folder, sibling website with collection-per-page browsing, two install paths.
 
@@ -30,8 +32,8 @@ Restated for register completeness:
 
 - **LLM interprets, code enforces.** The MCP server is the deterministic layer. All structural enforcement — out-of-order rejection, output_schema validation, forward invalidation, session caps, TTL, the `_DO_NOT_RULES` injection — is mechanical and code-level. None of v7's product framing changes this.
 - **Schema as contract.** YAML stays canonical. The schema (`megalos_server/schema.py`) is the source of truth across every authoring surface and every consumer surface.
-- **Three-dependency runtime.** `fastmcp`, `pyyaml`, `jsonschema`. Phase H pluggable backends live in extras. Workflows, agorá, and the file-download path add no hard runtime dependency.
-- **Provider-agnosticism.** No per-provider prompt translation. Workflows run the same against any provider the user's API key supports.
+- **Three-dependency runtime.** `fastmcp`, `pyyaml`, `jsonschema`. Phase H pluggable backends live in extras. Conversations, agorá, and the file-download path add no hard runtime dependency.
+- **Provider-agnosticism.** No per-provider prompt translation. Workflow YAMLs run the same against any provider the user's API key supports.
 - **Progressive tool disclosure.** The agorá chat UI must not load all tool definitions upfront.
 - **The expressiveness ceiling.** No debugger, no interpreter, no recursion. The schema does not become Turing-complete.
 
@@ -39,28 +41,28 @@ The thesis applies to every product surface v7 introduces.
 
 ---
 
-## 3. The product — agorá, Workflows, and megálos
+## 3. The product — agorá, Conversations, and megálos
 
 ### 3.1 agorá — the consumer surface
 
 agorá is the consumer-facing brand. Two surfaces sit under it, deployed both as a self-host bundle and as a hosted product:
 
-- **The catalog website** (`agora-workflows.dev` at v1 — see §6.4 for migration commitment). The discovery surface. A user lands here, browses collections by domain (writing, analysis, professional, future additions), reads what each does, and decides which to use. SEO matters because this is the entry-point surface; mostly-static pages with collection-per-page browsing; SvelteKit + adapter-static is the v1 implementation per ADR-007.
-- **The chat UI** (subdomain or path under `agora-workflows.dev` — exact hostname pinned at Phase G `/plan` time). The working surface. Users select a collection from the catalog, configure it lightly, supply their own LLM API key, and run the collection's workflows interactively. Plain Svelte SPA, static-bundle target per ADR-007. Two modes inside one UI: run mode (the mass surface, per v6 §3.2), and configure-mode-naive picker (per ADR-003 Clause 1).
+- **The catalog website** (`agora-conversations.dev` at v1 — see §6.4 for migration commitment). The discovery surface. A user lands here, browses collections by domain (writing, analysis, professional, future additions), reads what each does, and decides which to use. SEO matters because this is the entry-point surface; mostly-static pages with collection-per-page browsing; SvelteKit + adapter-static is the v1 implementation per ADR-007.
+- **The chat UI** (subdomain or path under `agora-conversations.dev` — exact hostname pinned at Phase G `/plan` time). The working surface. Users select a collection from the catalog, configure it lightly, supply their own LLM API key, and run the collection's workflows interactively. Plain Svelte SPA, static-bundle target per ADR-007. Two modes inside one UI: run mode (the mass surface, per v6 §3.2), and configure-mode-naive picker (per ADR-003 Clause 1).
 
 Both surfaces are agorá-branded, both in the hosted deployment and in the self-host bundle. There is no megálos-branded fallback. A user running `pip install megalos-server` and visiting `localhost` sees the agorá catalog and chat UI, branded identically to the hosted product. This is the GitLab-self-host analog: the product identity is the bundle, not the operator.
 
-### 3.2 Workflows — the content layer
+### 3.2 Conversations — the content layer
 
-Workflows is the curated catalog of megálos MCP-server collections. v6 §3.1 commits the granularity (one collection equals one MCP server) and the curation discipline (closed at launch under sole-author curation; opens with mikrós-driven scale). v7 preserves both unchanged. What v7 changes is repo topology.
+Conversations is the curated catalog of megálos MCP-server collections. v6 §3.1 commits the granularity (one collection equals one MCP server) and the curation discipline (closed at launch under sole-author curation; opens with mikrós-driven scale). v7 preserves both unchanged. What v7 changes is repo topology.
 
-**One aggregator repository.** Workflows lives at the operator-pinned aggregator repo under `agora-creations` (exact name pinned in ADR-009). Each collection is a folder inside the repo: `writing/`, `analysis/`, `professional/`, plus future additions. The folder naming drops the `megalos-` prefix that prior repos carried — inside the aggregator the prefix is noise, and inside the post-inversion brand architecture the prefix references a layer (the runtime) the content layer doesn't represent.
+**One aggregator repository.** Conversations lives at `agora-creations/awesome-conversations` (D061 pin; ADR-009 records the pattern). Each collection is a folder inside the repo: `writing/`, `analysis/`, `professional/`, plus future additions. The folder naming drops the `megalos-` prefix that prior repos carried — inside the aggregator the prefix is noise, and inside the post-inversion brand architecture the prefix references a layer (the runtime) the content layer doesn't represent.
 
-**Per-collection MCP endpoints retained.** Each folder deploys to its own MCP server endpoint. Hostname pattern at v1: `writing.agora-workflows.dev`, `analysis.agora-workflows.dev`, `professional.agora-workflows.dev` (per Q2 of the predecessor /discuss). Self-hosters configure their own hostnames; the pattern is the operator's hosted-deployment convention, not a runtime constraint.
+**Per-collection MCP endpoints retained.** Each folder deploys to its own MCP server endpoint. Hostname pattern at v1: `writing.agora-conversations.dev`, `analysis.agora-conversations.dev`, `professional.agora-conversations.dev` (per Q2 of the predecessor /discuss). Self-hosters configure their own hostnames; the pattern is the operator's hosted-deployment convention, not a runtime constraint.
 
 **Per-collection versioning retained.** Each collection has its own release tag at the folder level (`writing-v0.6.0`, `analysis-v0.4.2`, `professional-v0.5.1`). ADR-005's account-bound version-binding model operates on per-collection versions; the aggregator-repo structure does not change ADR-005's commitments.
 
-**OSS commitment unchanged.** Every collection is OSS at the source level under the aggregator repo. v6 §6.6's OSS scope holds — runtime, Workflows, mikrós skill library, and agorá UI source are open in perpetuity; the operational layer is the operator's commercial code.
+**OSS commitment unchanged.** Every collection is OSS at the source level under the aggregator repo. v6 §6.6's OSS scope holds — runtime, Conversations, mikrós skill library, and agorá UI source are open in perpetuity; the operational layer is the operator's commercial code.
 
 The structural reversal — three repos to one — has operational reasons that ADR-009 records. v7 commits the *pattern*; ADR-009 commits the *reasoning*.
 
@@ -68,7 +70,7 @@ The structural reversal — three repos to one — has operational reasons that 
 
 A collection is consumed in one of two ways. v6 named only the first; v7 adds the second.
 
-**Path 1 — MCP-connect.** The user (or their AI agent) connects to a deployed MCP server endpoint and runs the collection's workflows. Hosted users connect to operator-deployed endpoints (`writing.agora-workflows.dev`, etc.); self-hosters deploy their own (or use someone else's). This is v6 §3.2's path, unchanged.
+**Path 1 — MCP-connect.** The user (or their AI agent) connects to a deployed MCP server endpoint and runs the collection's workflows. Hosted users connect to operator-deployed endpoints (`writing.agora-conversations.dev`, etc.); self-hosters deploy their own (or use someone else's). This is v6 §3.2's path, unchanged.
 
 **Path 2 — File-download.** The user runs an `npx`-style command (or, for hosted users, clicks "Use in agorá") that drops the collection's YAML files directly into their `megalos-server` workflows directory (or their hosted agorá account). The runtime loads them exactly as it would load any hand-authored workflow. No new schema, no special path in the runtime, no privileged API. The downloaded YAML is identical to what's served at the MCP endpoint — this is a distribution mechanism, not an alternative content shape.
 
@@ -82,7 +84,7 @@ The hosted "Use in agorá" affordance is the same path served differently: the u
 
 ### 3.4 megálos and mikrós — the technical layer
 
-**megálos** is the runtime. The Python package is `megalos-server`; the runtime is "the megálos runtime" in technical contexts. It is not a consumer-facing brand. It is the implementation that runs Workflows collections, regardless of whether they're served via MCP-connect or loaded via file-download. Self-hosters install `pip install megalos-server`; hosted-product operators run the same package on their managed infrastructure. `megalos-server` is OSS in perpetuity per v6 §6.6.
+**megálos** is the runtime. The Python package is `megalos-server`; the runtime is "the megálos runtime" in technical contexts. It is not a consumer-facing brand. It is the implementation that runs Conversations collections, regardless of whether they're served via MCP-connect or loaded via file-download. Self-hosters install `pip install megalos-server`; hosted-product operators run the same package on their managed infrastructure. `megalos-server` is OSS in perpetuity per v6 §6.6.
 
 **mikrós** is the agent-skills library at `agora-creations/mikros`. Its consumers are AI coding agents (Claude Code, Gemini CLI, future adapters) and the developers who configure them. mikrós is developer-tooling, not consumer-facing. It stays externally visible under existing naming. Phase F's v0.2.1 release is grandfathered as-is — its references to megálos as the runtime are correct under the v7 framing because megálos *is* the runtime; the inversion doesn't reach into developer-tooling layer.
 
@@ -93,7 +95,7 @@ The brand-reframe sits cleanly because the three layers (consumer / content / te
 | Layer | Brand | Surface |
 |-------|-------|---------|
 | **Consumer surface** | agorá | Catalog website + chat UI. What end users see. |
-| **Content layer** | Workflows (aggregator repo under `agora-creations`) | Curated MCP-server collections with workflows. What agorá serves to users. |
+| **Content layer** | Conversations (`agora-creations/awesome-conversations`) | Curated MCP-server collections with workflows. What agorá serves to users. |
 | **Technical layer** | megálos (runtime) + mikrós (skills) | Implementation, schema, agent-skill library. What developers and contributors see. |
 
 A user encounters agorá and never needs to know about megálos or mikrós. A self-host operator encounters all three because they install the runtime that serves the consumer surface. A Shape 1 contributor authoring a collection encounters all three plus mikrós for AI assistance. Each layer addresses its own audience without bleeding into the others.
@@ -104,13 +106,13 @@ A user encounters agorá and never needs to know about megálos or mikrós. A se
 
 v6's five customer shapes carry forward without amendment. Restated tersely with the new naming:
 
-- **Shape 1 — Technical YAML authors.** Author Workflows candidates. Use shipped runtime and authoring DX. May self-host any combination of Workflows and agorá. Do not pay for hosted agorá unless they value its operational maturity.
-- **Shape 2 — Small teams and indie developers.** Build domain-specific workflows with mikrós assistance. May contribute collections back to Workflows. May self-host or use paid agorá.
-- **Shape 3 — Enterprise self-hosters.** Self-host agorá plus Workflows on their own infrastructure. Phase H serves them.
+- **Shape 1 — Technical YAML authors.** Author Conversations candidates. Use shipped runtime and authoring DX. May self-host any combination of Conversations and agorá. Do not pay for hosted agorá unless they value its operational maturity.
+- **Shape 2 — Small teams and indie developers.** Build domain-specific workflows with mikrós assistance. May contribute collections back to Conversations. May self-host or use paid agorá.
+- **Shape 3 — Enterprise self-hosters.** Self-host agorá plus Conversations on their own infrastructure. Phase H serves them.
 - **Shape 4 — Hosted-plan customers.** Use paid agorá, pick a collection, BYOK. The primary paying audience.
 - **Shape 5 — Non-technical configurers.** Use paid agorá, pick a collection, configure it lightly. Audience deferred per ADR-003 (Phase J shipping decision).
 
-The shapes-as-gradient framing from v6 §4 holds — "build their own" (Shape 1) to "pick and configure" (Shape 5) — with agorá and Workflows shared across all five.
+The shapes-as-gradient framing from v6 §4 holds — "build their own" (Shape 1) to "pick and configure" (Shape 5) — with agorá and Conversations shared across all five.
 
 ---
 
@@ -121,11 +123,11 @@ The following v6 positions carry forward unchanged and are re-asserted:
 - **The technical thesis** (v6 §2). Unchanged.
 - **Catalog granularity** (v6 §3.1). One collection equals one MCP server. The repo-topology reversal in v7 §6.1 does not change this.
 - **Curation discipline** (v6 §3.1). Closed at launch under sole-author curation; opens with mikrós-driven scale; mikrós-walked end-to-end and real-LLM-verified before shipping.
-- **Workflows is OSS** (v6 §3.1, §6.6). Every collection is open-source under the `agora-creations` aggregator repo.
+- **Conversations is OSS** (v6 §3.1, §6.6). Every collection is open-source under the `agora-creations/awesome-conversations` aggregator repo.
 - **agorá (formerly megálos in v6 prose) is paid for infrastructure** (v6 §3.2, §6.2). Inference stays BYOK in perpetuity. Self-hosting stays a first-class supported path.
 - **megálos and Phase G/Phase I coupling** (v6 §6.5). Phase G builds the chat UI surface; Phase I deploys it on Phase H'd infrastructure with billing, auth, and managed operations. v7 renames the surface (now agorá) but keeps the coupling.
 - **Phase J scope shrunk to configure mode and deferred** (v6 §6.4 + ADR-003). Phase J's eventual reopening per ADR-003's T1/T2/T3 triggers is unchanged. Configure mode in Phase J serves Shape 5.
-- **OSS commitment** (v6 §6.6). Runtime, Workflows, mikrós skill library, and consumer-surface UI source are OSS. Operational layer is the operator's commercial code.
+- **OSS commitment** (v6 §6.6). Runtime, Conversations, mikrós skill library, and consumer-surface UI source are OSS. Operational layer is the operator's commercial code.
 - **Inference is BYOK in perpetuity** (v6 §5, §6.2). The runtime never sees billing.
 - **The five customer shapes** (v6 §4). Unchanged in audience, slightly amended in surface naming.
 - **The expressiveness ceiling** (v6 §2, §5). Unchanged.
@@ -143,7 +145,7 @@ The three current collection repositories — `agora-creations/megalos-writing`,
 
 **Per-collection versioning retained.** Each collection tags its own releases (`writing-v0.6.0`, `analysis-v0.4.2`, etc.). ADR-005's account-bound collection-version binding operates on per-folder versions. The aggregator-repo structure does not collapse versioning to a single repo-level version.
 
-**Per-collection MCP deployment retained.** Each folder deploys independently. The deployment hostname pattern is `<folder>.agora-workflows.dev` (per §6.4). Self-hosters configure their own hostnames.
+**Per-collection MCP deployment retained.** Each folder deploys independently. The deployment hostname pattern is `<folder>.agora-conversations.dev` (per §6.4). Self-hosters configure their own hostnames.
 
 **Migration handling for existing repos** is predecessor-execution work, not v7 strategic commitment. Issues, PRs, stars, watchers carry over via GitHub's repo-archive-and-redirect or repo-rename-then-merge mechanisms; the operational details land at the predecessor-work-execution gate.
 
@@ -158,7 +160,7 @@ This reverses v6 §9 Q1 (which resolved "megálos" as the consumer-facing brand)
 The three-layer architecture (consumer / content / technical) is now named consistently:
 
 - **Consumer:** agorá. End users encounter this name on the catalog website, in the chat UI, in marketing materials, in self-host bundles. The product identity travels with the bundle, not with the operator — a self-hoster sees agorá branding on their `localhost`, the same way a self-hosted GitLab instance is branded GitLab.
-- **Content:** Workflows, hosted at the operator-pinned aggregator repo under `agora-creations` (exact name pinned in ADR-009). The repository sits inside the `agora-creations` org; folder names inside it (`writing/`, `analysis/`, `professional/`) are content-descriptive without brand prefix.
+- **Content:** Conversations, hosted at `agora-creations/awesome-conversations` (D061 pin; ADR-009 records the pattern). The repository sits inside the `agora-creations` org; folder names inside it (`writing/`, `analysis/`, `professional/`) are content-descriptive without brand prefix.
 - **Technical:** megálos (runtime) and mikrós (skills). Greek-named, technical-tool addressed at developers and AI agents. Not consumer-facing.
 
 ADR-008 records the strategic reasoning behind the brand-architecture decision.
@@ -180,9 +182,9 @@ Implementation is bounded — the path is essentially "fetch raw YAML from the c
 
 ### 6.4 External surface and migration commitment
 
-The operator-owned base domain at v1 is **`agora-workflows.dev`**. The catalog website lives at the apex; MCP endpoints follow the `<folder>.agora-workflows.dev` pattern (`writing.agora-workflows.dev`, etc.); the chat UI's subdomain or path is pinned at Phase G `/plan` time.
+The operator-owned base domain at v1 is **`agora-conversations.dev`** (D061 rename, was `agora-workflows.dev`). The catalog website lives at the apex; MCP endpoints follow the `<folder>.agora-conversations.dev` pattern (`writing.agora-conversations.dev`, etc.); the chat UI's subdomain or path is pinned at Phase G `/plan` time.
 
-The bare-name domain `agora.{dev,run,tools}` is the **preferred long-term shape** but unobtainable at v7 ship. All three are registered with active NS records, dormant on HTTP — held by parties who have not made them publicly purchasable. v7 commits to `agora-workflows.dev` as the v1 external surface and names bare-name domain acquisition as a future opportunity. If at any future point one of `agora.{dev,run,tools}` becomes acquirable at acceptable cost, the migration triggers a domain-migration amendment to v7 (or a successor vision document) — the structural commitments do not change; only the specific TLD in external-surface references migrates.
+The bare-name domain `agora.{dev,run,tools}` is the **preferred long-term shape** but unobtainable at v7 ship. All three are registered with active NS records, dormant on HTTP — held by parties who have not made them publicly purchasable. v7 commits to `agora-conversations.dev` as the v1 external surface and names bare-name domain acquisition as a future opportunity. If at any future point one of `agora.{dev,run,tools}` becomes acquirable at acceptable cost, the migration triggers a domain-migration amendment to v7 (or a successor vision document) — the structural commitments do not change; only the specific TLD in external-surface references migrates.
 
 This deferral pattern follows v6 §6.4 (consumer-subscription onramp removal — name the principle, defer the specifics) and v6 §9 Q3 (pricing model — commit the constraint, defer the value). Vision documents pin the architecture; specific resource acquisitions land as amendments when their triggers fire.
 
@@ -195,13 +197,13 @@ Predecessor work has its own ordered sub-sequence:
 1. **Brand resolution.** Resolved in the predecessor /discuss of 2026-04-27. The five Q1–Q5 outputs are the input to this vision-v7 document.
 2. **vision-v7.** This document.
 3. **Repo consolidation and per-folder deploy migration.** Move three repos into one; migrate deploy infrastructure to per-folder endpoints under the new domain.
-4. **Catalog website MVP.** Static site at `agora-workflows.dev`, collection-per-page browsing, both consumption paths surfaced.
+4. **Catalog website MVP.** Static site at `agora-conversations.dev`, collection-per-page browsing, both consumption paths surfaced.
 
 Predecessor work has no roadmap document yet. Its scope is what's enumerated here; a roadmap document may follow once the brand-resolution and repo-consolidation slices are in execution. The shape of this phase is not GSD-2 milestone-scaled in the same way M001–M012 were; it is closer in shape to "ship the rescoping operationally before downstream phases consume it."
 
 ### 6.6 OSS commitment (preserved from v6 §6.6)
 
-Restated for completeness. The runtime (`megalos-server`), Workflows (the operator-pinned aggregator repo under `agora-creations`), the mikrós skill library, and agorá's UI source are committed open-source in perpetuity. The operational layer — billing, auth, deployment automation, observability infrastructure, fleet management — is the operator's commercial code and is not open-source. ADR-004's (C)/(O)/(B) framework is the categorization discipline.
+Restated for completeness. The runtime (`megalos-server`), Conversations (`agora-creations/awesome-conversations`), the mikrós skill library, and agorá's UI source are committed open-source in perpetuity. The operational layer — billing, auth, deployment automation, observability infrastructure, fleet management — is the operator's commercial code and is not open-source. ADR-004's (C)/(O)/(B) framework is the categorization discipline.
 
 Renaming consumer-surface from megálos to agorá does not change the OSS scope. Every component v6 committed as OSS remains OSS.
 
@@ -215,9 +217,9 @@ The roadmap phases keep their letters. What changes is the predecessor work (new
 
 **Phase F (shipped).** mikrós external library at `agora-creations/mikros`. Claude Code v1 empirically certified at v0.2.1 on 2026-04-26. v0.2.1 is grandfathered as-is per the predecessor /discuss Q5 resolution. Future adapters (Gemini CLI / OpenCode at v1.1, Codex at v1.2) proceed under the existing portability protocol.
 
-**Predecessor work (next).** Repo consolidation, brand-architecture rollout, catalog website MVP at `agora-workflows.dev`. Lands before Phase H MH1.
+**Predecessor work (next).** Repo consolidation, brand-architecture rollout, catalog website MVP at `agora-conversations.dev`. Lands before Phase H MH1.
 
-**Phase G (after predecessor work).** agorá's chat UI. Run mode plus configure-mode-naive picker. Self-host-capable from day one. Assumes the catalog at `agora-workflows.dev` exists as the user's entry point. Roadmap document to be drafted after the four (P) /discusses identified in the Phase G roadmap scoping (`docs/vision/2026-04-27-phase-g-roadmap-scoping.md`) resolve. Tech stack and distribution shape: ADR-007 (drafted last, after this v7 ships, with stable naming references throughout).
+**Phase G (after predecessor work).** agorá's chat UI. Run mode plus configure-mode-naive picker. Self-host-capable from day one. Assumes the catalog at `agora-conversations.dev` exists as the user's entry point. Roadmap document to be drafted after the four (P) /discusses identified in the Phase G roadmap scoping (`docs/vision/2026-04-27-phase-g-roadmap-scoping.md`) resolve. Tech stack and distribution shape: ADR-007 (drafted last, after this v7 ships, with stable naming references throughout).
 
 **Phase H (after predecessor work).** Distribution hardening, MH1 → MH6 per the Phase H roadmap. Scope unchanged from v6. Now sits behind predecessor work as well as Phase G in the dependency graph.
 
@@ -225,7 +227,7 @@ The roadmap phases keep their letters. What changes is the predecessor work (new
 
 **Phase J (deferred indefinitely per ADR-003).** Configure mode, layered on Phase G. Reopens per ADR-003's T1/T2/T3 triggers.
 
-**Workflows curation (parallel sustained track).** Not a phase. Ongoing. Now operates on the consolidated aggregator with sibling folders rather than on three separate repos.
+**Conversations curation (parallel sustained track).** Not a phase. Ongoing. Now operates on the consolidated aggregator with sibling folders rather than on three separate repos.
 
 ---
 
@@ -233,9 +235,9 @@ The roadmap phases keep their letters. What changes is the predecessor work (new
 
 These belong in later documents, remain rejected, or are downstream details:
 
-- **The chat UI's exact subdomain or path** (e.g., `app.agora-workflows.dev` vs `agora-workflows.dev/run`). Phase G `/plan` time.
+- **The chat UI's exact subdomain or path** (e.g., `app.agora-conversations.dev` vs `agora-conversations.dev/run`). Phase G `/plan` time.
 - **The `agora-ui` repo question** (where the chat UI source lives — separate repo bundled as package data, or inside `megalos-server`). Predecessor-work `/plan` time, before Phase G's MG1 begins.
-- **The Workflows aggregator repo migration mechanics** (issue carryover, archive of old repos, redirect handling). Predecessor-work execution detail.
+- **The Conversations aggregator repo migration mechanics** (issue carryover, archive of old repos, redirect handling). Predecessor-work execution detail.
 - **The bare-name domain acquisition timeline.** Indefinite. Not on any phase's critical path.
 - **Detailed scope of configure mode.** Phase J work, deferred per ADR-003.
 - **Exact pricing model.** Phase I scoping, v6 §9 Q3, deferred.
@@ -258,11 +260,11 @@ The following should be resolved during the relevant phase's `/discuss` gate, no
 
 4. **Self-host vs paid: explicit value asymmetry — RESOLVED in v6 §9 Q4 → ADR-004.** Carries forward unchanged.
 
-5. **The minimum Workflows catalog size for agorá launch.** v6 §6.1's 5-to-10-collection floor carries forward. Empirical question; resolved by user signal post-launch.
+5. **The minimum Conversations catalog size for agorá launch.** v6 §6.1's 5-to-10-collection floor carries forward. Empirical question; resolved by user signal post-launch.
 
 6. **The embedded agent's failure modes** (Phase J). Deferred with Phase J per ADR-003.
 
-7. **Workflows quality enforcement at opened curation.** Future document. Closed curation is sufficient at v1.
+7. **Conversations quality enforcement at opened curation.** Future document. Closed curation is sufficient at v1.
 
 8. **Consumer brand for the operator entity — RESOLVED in v7.** v6 §9 Q8's deferral collapses: consumer brand is **agorá**; legal/billing entity name is still operationally deferred but no longer strategically open. Inline amendment-marker in v6 §9 Q8 points readers here.
 
@@ -278,15 +280,15 @@ The following should be resolved during the relevant phase's `/discuss` gate, no
 
 ## 10. Summary
 
-Vision-v7 reorganizes the consumer surface, the content layer, and the technical layer into three cleanly-named architectural levels: **agorá** (consumer), **Workflows** (content, hosted at the operator-pinned aggregator repo under `agora-creations`; ADR-009 pins the exact name), and **megálos**/**mikrós** (technical and developer-tooling). The v6 product narrative — open-source content with paid infrastructure for operational maturity, BYOK inference in perpetuity, self-hosting first-class — carries forward unchanged.
+Vision-v7 reorganizes the consumer surface, the content layer, and the technical layer into three cleanly-named architectural levels: **agorá** (consumer), **Conversations** (content, hosted at `agora-creations/awesome-conversations`; ADR-009 records the consolidation pattern), and **megálos**/**mikrós** (technical and developer-tooling). The v6 product narrative — open-source content with paid infrastructure for operational maturity, BYOK inference in perpetuity, self-hosting first-class — carries forward unchanged.
 
 The three changes from v6 are: repo consolidation (three collection repos collapse to one aggregator with sibling folders, granularity preserved); brand inversion (agorá replaces megálos as consumer-facing brand for both surfaces and both deployments, megálos demotes to runtime technical name); file-download consumption path added alongside MCP-connect.
 
 The technical thesis is unchanged. The five customer shapes are unchanged. Every guardrail v6 inherited from v5 carries forward. ADR-001 through ADR-006 carry forward without disturbance.
 
-**Domain commitment.** v1 base domain is `agora-workflows.dev` (operator-registered, ~$15/yr). Bare-name `agora.{dev,run,tools}` is the preferred long-term shape; current registration status precludes acquisition at v7 ship. Future acquisition triggers a domain-migration amendment.
+**Domain commitment.** v1 base domain is `agora-conversations.dev` (operator-registered, ~$15/yr; D061 rename from `agora-workflows.dev`). Bare-name `agora.{dev,run,tools}` is the preferred long-term shape; current registration status precludes acquisition at v7 ship. Future acquisition triggers a domain-migration amendment.
 
-**Predecessor work** (brand resolution → this vision-v7 document → repo consolidation + per-folder deploy migration → catalog website MVP) lands before Phase H MH1 begins. Phase G's chat UI assumes the catalog at `agora-workflows.dev` already exists.
+**Predecessor work** (brand resolution → this vision-v7 document → repo consolidation + per-folder deploy migration → catalog website MVP) lands before Phase H MH1 begins. Phase G's chat UI assumes the catalog at `agora-conversations.dev` already exists.
 
 The reversal of v6 is in surface architecture, not in technical commitment. v7 preserves every guardrail v6 named, sharpens the three-layer brand structure that v6 left implicit, and pins the rescoping operationally so downstream phases consume it from a stable frame.
 

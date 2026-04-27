@@ -91,21 +91,21 @@ The OSS-content-plus-paid-infrastructure split is a natural one because:
 
 ## 4. Customer shapes — rebalanced
 
-> **Vocabulary update (2026-04-27, v7).** v7 renames v6's "Library" (consumer-content brand) to **Workflows**, and v6's folder-unit "Library entry" to **collection**. The §4 prose below has been refreshed in place to use the new vocabulary; the rest of v6 retains its original "Library / Library entry" framing as a historical record. See vision-v7 §6.2 + ADR-008 commitment 2 for the rationale.
+> **Vocabulary update (2026-04-28, post-v7).** v7 renamed v6's "Library" (consumer-content brand) to "Workflows", and v6's folder-unit "Library entry" to **collection**. A subsequent rebrand (D061, 2026-04-28) supersedes the "Workflows" brand-layer name with **Conversations** — the catalog domain becomes `agora-conversations.dev`, the aggregator repo becomes `awesome-conversations`. The §4 prose below has been refreshed in place to use the current vocabulary; the rest of v6 retains its original "Library / Library entry" framing as a historical record, and references to "Workflows" in v7 prose remain as the intermediate-state record. The folder-unit term **collection** is unchanged. The megálos-server technical primitives (`workflow_dir`, `list_workflows`, workflow YAMLs) are unchanged — this is a brand/consumer-layer rename only. See vision-v7 §6.2 + ADR-008 + D061 for the rationale.
 
-The five customer shapes from v5 are preserved as an audience taxonomy. The rebalance is in how each shape interacts with Workflows and megálos.
+The five user shapes from v5 are preserved as an audience taxonomy. The rebalance is in how each shape interacts with Conversations and megálos.
 
-**Shape 1 — Technical YAML authors.** Author Workflows candidates. Use the shipped runtime and authoring DX (M001–M012 outputs). May also self-host any combination of Workflows and megálos. Do not pay for megálos unless they value its operational maturity over running it themselves.
+**Shape 1 — Technical YAML authors.** Author Conversations candidates. Use the shipped runtime and authoring DX (M001–M012 outputs). May also self-host any combination of Conversations and megálos. Do not pay for megálos unless they value its operational maturity over running it themselves.
 
-**Shape 2 — Small teams and indie developers.** Build domain-specific workflows with mikrós assistance in their own development environment (Claude Code, Gemini CLI, etc.). May contribute collections back to Workflows. May self-host, may use paid megálos for ease of distribution to non-technical teammates. mikrós's external-consumer audience.
+**Shape 2 — Small teams and indie developers.** Build domain-specific workflows with mikrós assistance in their own development environment (Claude Code, Gemini CLI, etc.). May contribute collections back to Conversations. May self-host, may use paid megálos for ease of distribution to non-technical teammates. mikrós's external-consumer audience.
 
-**Shape 3 — Enterprise self-hosters.** Self-host megálos plus Workflows on their own infrastructure for compliance, security, or cost reasons. Phase H serves them.
+**Shape 3 — Enterprise self-hosters.** Self-host megálos plus Conversations on their own infrastructure for compliance, security, or cost reasons. Phase H serves them.
 
 **Shape 4 — Hosted-plan customers.** Use paid megálos, picking a collection and running it with their own API keys. The primary paying audience. Phases G and I jointly serve them.
 
 **Shape 5 — Non-technical configurers.** Use paid megálos, picking a collection and using configure mode to adapt it lightly. Audience is non-technical users *willing to provision an LLM API key* — narrower than v5's "non-technical mass-market" framing because the consumer-subscription onramp is not currently feasible (see §6.4 amendment, §9 Q2). Phase J (light) serves them, layered on top of Phase G's run mode. The strategic question of whether Phase J is worth shipping on API-key-only economics is open; see §9 Q11.
 
-The shapes are no longer five parallel onramps. They are a gradient from "build their own" (Shape 1) to "pick and configure" (Shape 5). Workflows and megálos are shared across all five shapes; what differs is how much each shape modifies the collection they pick and where they run it.
+The shapes are no longer five parallel onramps. They are a gradient from "build their own" (Shape 1) to "pick and configure" (Shape 5). Conversations and megálos are shared across all five shapes; what differs is how much each shape modifies the collection they pick and where they run it.
 
 ---
 
