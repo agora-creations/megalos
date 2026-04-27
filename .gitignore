@@ -57,6 +57,10 @@ simplicity-guard/
 # the handbook's own §13: "Private. Not for the repo. Not for the agent.")
 *-operator-handbook.md
 
+# Private build documents — ADRs and discovery artifacts
+docs/adr/
+docs/discovery/
+
 # megálos runtime state (per-project, not shared — frozen archive)
 .megalos/
 
