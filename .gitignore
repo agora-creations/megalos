@@ -53,6 +53,9 @@ install.sh
 .claude/
 .bg-shell/
 simplicity-guard/
+# Operator handbooks — private operator reference, never shipped (per
+# the handbook's own §13: "Private. Not for the repo. Not for the agent.")
+*-operator-handbook.md
 
 # megálos runtime state (per-project, not shared — frozen archive)
 .megalos/
