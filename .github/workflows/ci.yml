@@ -127,3 +127,32 @@ jobs:
         run: uv sync --extra panel
       - name: pytest (full with coverage + threshold)
         run: uv run pytest
+
+  # Clean-venv wheel smoke (D065 — Layer 3 dev workflow).
+  # Builds the agorá UI bundle, builds a wheel, installs it into a fresh
+  # tempdir venv, boots megalos-server on a random port, and asserts four
+  # production-shape invariants (SPA serves, /_/healthz 200, /mcp initialize
+  # responds, CORS-OFF default). Catches package-data declaration regressions
+  # and accidental CORS-on defaults that the source-tree gates cannot see.
+  # Single-cell matrix: py 3.12 only (smoke is wheel-shape-portability,
+  # not interpreter-version coverage). Fast — local runs ~30s.
+  smoke-wheel:
+    name: smoke-wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: 'pyproject.toml'
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: make smoke-wheel
+        run: make smoke-wheel
