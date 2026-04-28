@@ -1,0 +1,6 @@
+include LICENSE
+include README.md
+include agora-ui-version.txt
+recursive-include megalos_server *.py *.md *.yaml
+recursive-include megalos_server/static_ui *
+recursive-include schemas *.json

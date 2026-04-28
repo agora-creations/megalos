@@ -35,7 +35,7 @@ build-backend = "setuptools.build_meta"
 include = ["megalos_server*", "megalos_panel*", "mcp_stub*"]
 
 [tool.setuptools.package-data]
-megalos_server = ["workflows/*.yaml", "*.md"]
+megalos_server = ["workflows/*.yaml", "*.md", "static_ui/**/*"]
 
 # Coverage threshold pinned at baseline-minus-2%. Baseline measured by
 # `uv run pytest --cov --cov-report=term` during M002/S01/T04 → 85% TOTAL;

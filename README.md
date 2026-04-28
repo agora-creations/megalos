@@ -183,6 +183,22 @@ Authoring mechanics — directive quality, context injection, gates, branches, s
 
 The canonical strategic document is [`docs/vision/2026-04-26-megalos-vision-v6.md`](docs/vision/2026-04-26-megalos-vision-v6.md). Five user shapes, six guardrails, the rationale for every phase above.
 
+## Build from source (developers only)
+
+PyPI users do **not** need Node — the published wheel and sdist ship the agorá UI bundle pre-built under `megalos_server/static_ui/`. This section is only relevant if you are building megálos from a source checkout.
+
+Building the bundle requires **Node 20+**. The agorá UI lives in a sibling repository (`agora-creations/agora-ui`); this repo pins a specific upstream commit in [`agora-ui-version.txt`](agora-ui-version.txt). To rebuild the bundle from that pinned SHA:
+
+```bash
+bash scripts/build-agora-ui.sh
+```
+
+The script clones agora-ui at the pinned SHA into `build/agora-ui-checkout/`, runs `npm ci && npm run build`, and copies `dist/` into `megalos_server/static_ui/`. Both `megalos_server/static_ui/` and `build/agora-ui-checkout/` are gitignored — they are build artifacts, not sources.
+
+To bump the pinned UI version, replace the SHA in `agora-ui-version.txt` and re-run the script. Release pipelines must invoke the script before `uv build` so the wheel/sdist include the freshly built bundle.
+
+> **Migration trigger.** Per ADR D063, when this script's `npm ci && npm run build` step exceeds ~2 min on CI, or when an enterprise self-hosted deployment needs offline builds, swap the clone+npm path for downloading a tarball from a GitHub Releases artifact pinned to the same SHA. That eliminates Node from megálos's build environment entirely.
+
 ## License
 
 MIT. See [`LICENSE`](LICENSE).
