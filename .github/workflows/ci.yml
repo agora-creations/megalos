@@ -139,8 +139,28 @@ jobs:
   smoke-wheel:
     name: smoke-wheel
     runs-on: ubuntu-latest
+    # agora-ui is private. Default GITHUB_TOKEN can read other private
+    # repos in the same org *only* with explicit cross-repo grant. The
+    # cleanest path is to actions/checkout the pinned SHA here, then
+    # let scripts/build-agora-ui.sh skip its own clone via
+    # AGORA_UI_SKIP_CLONE=1 — that re-uses the workflow's auth without
+    # introducing a long-lived PAT.
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+      - name: Read pinned agora-ui SHA
+        id: agora_ui_sha
+        run: |
+          SHA="$(tr -d '[:space:]' < agora-ui-version.txt)"
+          echo "sha=${SHA}" >> "${GITHUB_OUTPUT}"
+      - name: Checkout agora-ui at pinned SHA
+        uses: actions/checkout@v4
+        with:
+          repository: agora-creations/agora-ui
+          ref: ${{ steps.agora_ui_sha.outputs.sha }}
+          path: build/agora-ui-checkout
+          token: ${{ secrets.AGORA_UI_READ_TOKEN || secrets.GITHUB_TOKEN }}
       - name: Set up Node 20
         uses: actions/setup-node@v4
         with:
@@ -155,4 +175,6 @@ jobs:
         with:
           python-version: '3.12'
       - name: make smoke-wheel
+        env:
+          AGORA_UI_SKIP_CLONE: '1'
         run: make smoke-wheel

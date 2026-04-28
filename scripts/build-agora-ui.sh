@@ -48,14 +48,32 @@ echo "==> agora-ui pinned SHA: ${SHA}"
 echo "==> Node: ${NODE_VERSION_RAW}"
 
 # --- Idempotent reset -------------------------------------------------------
-rm -rf "${CHECKOUT_DIR}"
 rm -rf "${STATIC_DIR}"
 mkdir -p "$(dirname "${CHECKOUT_DIR}")"
 
 # --- Clone + checkout pinned SHA -------------------------------------------
-echo "==> Cloning ${AGORA_UI_REPO}"
-git clone --quiet "${AGORA_UI_REPO}" "${CHECKOUT_DIR}"
-git -C "${CHECKOUT_DIR}" checkout --quiet "${SHA}"
+# Escape hatch for CI: when AGORA_UI_SKIP_CLONE=1, skip the clone+checkout
+# and trust that ${CHECKOUT_DIR} is already populated at the right SHA by
+# an upstream step (e.g. actions/checkout in the smoke-wheel CI job, which
+# uses the workflow's GITHUB_TOKEN to read the private agora-ui repo).
+# Local + dev paths leave this unset and clone fresh.
+if [[ "${AGORA_UI_SKIP_CLONE:-0}" == "1" ]]; then
+  if [[ ! -d "${CHECKOUT_DIR}" ]]; then
+    echo "error: AGORA_UI_SKIP_CLONE=1 but ${CHECKOUT_DIR} missing" >&2
+    exit 1
+  fi
+  ACTUAL_SHA="$(git -C "${CHECKOUT_DIR}" rev-parse HEAD)"
+  if [[ "${ACTUAL_SHA}" != "${SHA}" ]]; then
+    echo "error: pre-staged checkout at SHA ${ACTUAL_SHA}, expected ${SHA}" >&2
+    exit 1
+  fi
+  echo "==> Using pre-staged checkout at ${CHECKOUT_DIR}"
+else
+  rm -rf "${CHECKOUT_DIR}"
+  echo "==> Cloning ${AGORA_UI_REPO}"
+  git clone --quiet "${AGORA_UI_REPO}" "${CHECKOUT_DIR}"
+  git -C "${CHECKOUT_DIR}" checkout --quiet "${SHA}"
+fi
 
 # --- Install + build --------------------------------------------------------
 echo "==> npm ci"
