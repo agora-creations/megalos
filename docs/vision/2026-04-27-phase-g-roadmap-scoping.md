@@ -24,7 +24,7 @@ The scoping's purpose is to bound the pre-roadmap work — the subset that must 
 
 The pins Phase G's roadmap inherits from v7, v6, and the ADRs are not subjects of any (P) /discuss in this scoping. They are inputs.
 
-**Phase G presupposes predecessor work** (added 2026-04-27 post-v7). Per v7 §6.5, predecessor work — brand resolution, repo consolidation, catalog website MVP at `agora-workflows.dev` — lands before Phase G's MG1 begins. Phase G's chat UI assumes the catalog website already exists as the user's entry point: a user lands on the catalog, browses collections, clicks "Use in agorá," and is dropped into the chat UI with a collection already selected. MG1's foundation slice does not implement a Workflows-discovery surface within the chat UI itself; that lives in the catalog. Predecessor work is not Phase G; it is its own phase between current state (post-M012, post-Phase-F) and Phase G/Phase H.
+**Phase G presupposes predecessor work** (added 2026-04-27 post-v7). Per v7 §6.5, predecessor work — brand resolution, repo consolidation, catalog website MVP at `agora-conversations.dev` (D061 rename, was `agora-workflows.dev`) — lands before Phase G's MG1 begins. Phase G's chat UI assumes the catalog website already exists as the user's entry point: a user lands on the catalog, browses collections, clicks "Use in agorá," and is dropped into the chat UI with a collection already selected. MG1's foundation slice does not implement a Conversations-discovery surface within the chat UI itself; that lives in the catalog. Predecessor work is not Phase G; it is its own phase between current state (post-M012, post-Phase-F) and Phase G/Phase H.
 
 - **Configure-mode-naive UI design.** ADR-003 Clause 1. Collection picker is in scope; per-user customized-collection storage and embedded mikrós-reading agent are Phase J only. If Phase J reopens, it adapts to whatever Phase G has built; Phase G does not pre-adapt to Phase J.
 - **Analytics instrumentation at launch.** ADR-003 Clause 3. Two specific signals from Phase G ship: Shape-4 IDE-extension users exercising any in-product lightweight-customization affordance; Shape-4 churn at the customization wall vs Shape-2. Forward-looking on Phase G — not added at +5 months. Analytics is product instrumentation, not session data; its retention/privacy posture is independent of ADR-002's session TTL.
@@ -119,7 +119,7 @@ Lightest milestone. The "switch entry" affordance and the configure-mode-naive p
 - **"Switch entry" affordance** per ADR-010 commitment 8: surfaces the user's account-bound entry list (resolved by the backend per ADR-005); does not duplicate the catalog website's discovery surface.
 - **Configure-mode-naive picker** per ADR-003 Clause 1. The picker is in scope; per-user customized-entry storage and embedded mikrós-reading agent are Phase J only (deferred per ADR-003).
 - **Multi-entry browser tabs** per ADR-010 commitment 7: each tab is one MCP-over-HTTP session; no in-product tab manager. Backend tracks per-(user, entry) per ADR-002.
-- **K folds in here**: the catalog website (predecessor work, at `agora-workflows.dev`) is the discovery surface; the chat UI's "switch entry" is the in-product affordance only. K is closed.
+- **K folds in here**: the catalog website (predecessor work, at `agora-conversations.dev`) is the discovery surface; the chat UI's "switch entry" is the in-product affordance only. K is closed.
 - **Per-event emitters land**: `entry_switched` per ADR-011.
 
 *Slices: ~3–4.*
@@ -258,7 +258,7 @@ Each (P) /discuss output is recorded as an ADR or a v6 §9 amendment per the pre
 
 ## 9. References
 
-- **vision-v7** ([`2026-04-27-megalos-vision-v7.md`](./2026-04-27-megalos-vision-v7.md)) — current canonical vision; supersedes v6 with brand inversion (agorá as consumer brand) + repo consolidation. The chat UI is now agorá-branded; the consumer surface lives at `agora-workflows.dev`.
+- **vision-v7** ([`2026-04-27-megalos-vision-v7.md`](./2026-04-27-megalos-vision-v7.md)) — current canonical vision; supersedes v6 with brand inversion (agorá as consumer brand) + repo consolidation. The chat UI is now agorá-branded; the consumer surface lives at `agora-conversations.dev` (D061 rename, was `agora-workflows.dev`).
 - vision-v6 ([`2026-04-26-megalos-vision-v6.md`](./2026-04-26-megalos-vision-v6.md)) — historical reference; the original governing vision when this scoping was drafted. v6 §3.2, §6.5, §7, §9 carry forward into v7 with surface-naming updates.
 - ADR-001 ([`docs/adr/001-workflow-versioning.md`](../adr/001-workflow-versioning.md)) — `workflow_changed` envelope inherited by the agorá chat UI.
 - ADR-002 ([`docs/adr/002-run-mode-session-persistence.md`](../adr/002-run-mode-session-persistence.md)) — Phase G /discuss BLOCKER (commitment 4, resolved by ADR-006); session-resumption affordance; pre-Phase-I transition UX; self-host auth contract source.
